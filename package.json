@@ -2,6 +2,7 @@
   "name": "banyan-engine",
   "version": "1.0.0",
   "private": true,
+  "license": "AGPL-3.0-only",
   "type": "module",
   "description": "Zero-asset procedural banyan tree engine for three.js. src/ modules bundle back to a single-file artifact.",
   "scripts": {

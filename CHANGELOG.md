@@ -16,7 +16,7 @@ Added
 - **Docs**: full `README.md` with the complete `TreeSpec/v1` and `SceneSpec/v1` reference,
   species catalogue with hero seeds, performance notes, and honesty notes on GLB.
 - **Packaging**: distributable zips; GitHub Pages demo site. (The license of this
-  repository is MIT — see `LICENSE`.)
+  repository is AGPL-3.0 — see `LICENSE`.)
 
 ## [0.8.0] — 2026-07-07 — GPU hotfixes
 

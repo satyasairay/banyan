@@ -58,4 +58,6 @@ a living tree memorial for pets.
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+AGPL-3.0. See [LICENSE](LICENSE). In short: use it, learn from it, build with
+it — and if you ship something built on it, your code must be open too. For a
+commercial license outside those terms, contact the author.

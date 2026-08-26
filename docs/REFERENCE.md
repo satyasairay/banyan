@@ -295,7 +295,7 @@ and leaf re-coloring re-runs only the color pass (no geometry rebuild).
 
 ## License
 
-MIT — see [`LICENSE`](../LICENSE). All shipped content is 100% procedural:
+AGPL-3.0 — see [`LICENSE`](../LICENSE). All shipped content is 100% procedural:
 **no third-party assets are bundled** (see [`SOURCES.md`](../SOURCES.md)).
 three.js is MIT and loaded from its CDN.
 
