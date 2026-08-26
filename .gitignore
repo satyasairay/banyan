@@ -1,4 +1,2 @@
 node_modules/
-src/engine-v3.gen.js
-src/engine-v4.gen.js
-tools/seed-gallery.html
+.pytest-tmp*

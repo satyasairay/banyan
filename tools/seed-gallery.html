@@ -1,0 +1,1283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Banyan — seed gallery</title>
+<style>
+  html, body { margin:0; padding:0; background:#ffffff; color:#3a3a3a;
+    font:13px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  header { display:flex; gap:10px; align-items:center; padding:14px 18px; border-bottom:1px solid #eee; flex-wrap:wrap; }
+  header h1 { font-size:13px; margin:0 12px 0 0; letter-spacing:0.04em; text-transform:uppercase; color:#6a6a66; }
+  header label { color:#8a8a86; }
+  header input { font:inherit; padding:3px 6px; border:1px solid #ddd; border-radius:4px; }
+  #g-n { width:52px; } #g-seeds { width:340px; }
+  header button { font:inherit; padding:4px 12px; border:1px solid #cfcfca; border-radius:5px; background:#fbfbfa; cursor:pointer; }
+  header button:hover { background:#f0f0ee; }
+  #g-status { color:#b0b0ac; }
+  #grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:14px; padding:18px; }
+  .cell { margin:0; cursor:pointer; border:1px solid #eee; border-radius:8px; overflow:hidden; background:#fff; }
+  .cell:hover { border-color:#6b8f4e; }
+  .cell canvas { width:100%; height:auto; display:block; }
+  .cell figcaption { padding:6px 10px; color:#8a8a86; border-top:1px solid #f3f3f1; }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+}}
+</script>
+</head>
+<body>
+<header>
+  <h1>banyan &middot; seed gallery</h1>
+  <label>count <input id="g-n" type="number" min="1" max="64" step="1" value="12"></label>
+  <label>seeds <input id="g-seeds" type="text" placeholder="optional: 1892, 777, 42 — overrides count"></label>
+  <button id="g-grow">grow</button>
+  <span id="g-status"></span>
+</header>
+<div id="grid"></div>
+<script type="module">
+// src/gallery.js
+import * as THREE5 from "three";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+
+// src/rng.js
+import { MathUtils } from "three";
+var lerp = MathUtils.lerp;
+function mulberry32(a) {
+  return function() {
+    a |= 0;
+    a = a + 1831565813 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+var rng = mulberry32(1892);
+var reseed = (seed) => {
+  rng = mulberry32(seed);
+};
+var rand = () => rng();
+var rr = (a, b) => a + (b - a) * rng();
+var rrOf = (u, a, b) => a + (b - a) * u;
+function ihash01(n) {
+  n = Math.imul(n ^ n >>> 16, 73244475);
+  n = Math.imul(n ^ n >>> 16, 73244475);
+  n ^= n >>> 16;
+  return (n >>> 0) / 4294967296;
+}
+function hashN(x, y, z) {
+  let h = Math.imul(x | 0, 668265261) ^ Math.imul(y | 0, 374761393) ^ Math.imul(z | 0, 2654435761);
+  h = Math.imul(h ^ h >>> 15, 2246822507);
+  h = Math.imul(h ^ h >>> 13, 3266489909);
+  h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
+}
+function vnoise(x, y, z) {
+  const xi = Math.floor(x), yi = Math.floor(y), zi = Math.floor(z);
+  const xf = x - xi, yf = y - yi, zf = z - zi;
+  const sx = xf * xf * (3 - 2 * xf), sy = yf * yf * (3 - 2 * yf), sz = zf * zf * (3 - 2 * zf);
+  const n000 = hashN(xi, yi, zi), n100 = hashN(xi + 1, yi, zi), n010 = hashN(xi, yi + 1, zi), n110 = hashN(xi + 1, yi + 1, zi), n001 = hashN(xi, yi, zi + 1), n101 = hashN(xi + 1, yi, zi + 1), n011 = hashN(xi, yi + 1, zi + 1), n111 = hashN(xi + 1, yi + 1, zi + 1);
+  return lerp(
+    lerp(lerp(n000, n100, sx), lerp(n010, n110, sx), sy),
+    lerp(lerp(n001, n101, sx), lerp(n011, n111, sx), sy),
+    sz
+  );
+}
+function fbm(x, y, z, oct) {
+  let a = 0.5, s = 0, f = 1;
+  for (let i = 0; i < oct; i++) {
+    s += a * vnoise(x * f, y * f, z * f);
+    f *= 2.03;
+    a *= 0.5;
+  }
+  return s / (1 - Math.pow(0.5, oct));
+}
+
+// src/skeleton.js
+import * as THREE from "three";
+var clamp = THREE.MathUtils.clamp;
+var lerp2 = THREE.MathUtils.lerp;
+function arcTable(pts) {
+  const c = [0];
+  for (let i = 1; i < pts.length; i++) c.push(c[i - 1] + pts[i].distanceTo(pts[i - 1]));
+  return c;
+}
+function growSkeleton(S) {
+  const branches = [];
+  const anchors = [];
+  let trunkPts = [], trunkRadii = [];
+  const scaffoldIds = [], propRootIds = [];
+  const F = S.habit.field, FORM = S.habit.form || "dome";
+  let domeY;
+  if (FORM === "pads") {
+    const K = S.habit.pads || {};
+    const pl = K.lobes ?? 5, pa = K.amp ?? 0.3, pp = K.phase ?? 0.7;
+    domeY = (r, az) => F.base + F.amp * Math.exp(-(r * r) / F.falloff) * (1 - pa + pa * Math.pow(0.5 + 0.5 * Math.cos(az * pl + pp), 1.4));
+  } else if (FORM === "cascade") {
+    const K = S.habit.cascade || {};
+    const rise = K.riseRadius ?? 0.5, drop = K.drop ?? 1.8, reach = K.reach ?? 2.4;
+    domeY = (r) => F.base + F.amp * Math.exp(-(r * r) / F.falloff) - drop * THREE.MathUtils.smoothstep(r, rise, reach);
+  } else if (FORM === "cone") {
+    domeY = (r) => F.base + F.amp * Math.max(0, 1 - r / F.falloff);
+  } else {
+    domeY = (r) => F.base + F.amp * Math.exp(-(r * r) / F.falloff);
+  }
+  const CLAMP_Y = S.habit.clampY ?? 0.5;
+  function registerBranch(br) {
+    br.id = branches.length;
+    branches.push(br);
+    return br.id;
+  }
+  function addLeafAnchors(br) {
+    const A = S.foliage.anchor;
+    const cum = arcTable(br.pts), total = cum[cum.length - 1];
+    if (total < 0.04) return;
+    const step = A.step;
+    for (let s = total * A.startFrac; s < total; s += step * rr(A.jitter[0], A.jitter[1])) {
+      let i = 1;
+      while (i < cum.length - 1 && cum[i] < s) i++;
+      const f = (s - cum[i - 1]) / Math.max(1e-6, cum[i] - cum[i - 1]);
+      const p = br.pts[i - 1].clone().lerp(br.pts[i], f);
+      const r = lerp2(br.radii[i - 1], br.radii[i], f);
+      if (r > A.maxTwigRadius) continue;
+      const t = br.pts[i].clone().sub(br.pts[i - 1]).normalize();
+      const tt = s / total;
+      const w = 1 + Math.round(A.tipWeight * tt * tt) + (tt > A.tipThresh ? A.tipBonus : 0);
+      for (let k = 0; k < w; k++) anchors.push({ p, t, id: br.id });
+    }
+  }
+  function growBranch(o) {
+    const R = S.recursion;
+    const steps = clamp(Math.round(o.len / 0.11), 4, 16);
+    const ds = o.len / steps;
+    const pts = [o.start.clone()];
+    const dir = o.dir.clone().normalize();
+    const seed = branches.length * 3.77 + 11.3;
+    for (let i = 1; i <= steps; i++) {
+      const p = pts[i - 1];
+      const nx = fbm(p.x * 1.7 + seed, p.y * 1.7, p.z * 1.7, 3) - 0.5;
+      const ny = fbm(p.x * 1.7 + 9.1, p.y * 1.7 + seed, p.z * 1.7, 3) - 0.5;
+      const nz = fbm(p.x * 1.7, p.y * 1.7 + 4.7, p.z * 1.7 + seed, 3) - 0.5;
+      dir.addScaledVector(new THREE.Vector3(nx, ny, nz), o.wig * 2.2);
+      if (o.steer > 0) {
+        const r = Math.hypot(p.x, p.z);
+        dir.y += clamp(domeY(r, Math.atan2(p.z, p.x)) + (o.domeOff || 0) - p.y, -CLAMP_Y, CLAMP_Y) * S.habit.steer * o.steer;
+        if (r > 0.05) dir.addScaledVector(new THREE.Vector3(p.x / r, 0, p.z / r), S.habit.outward * o.steer);
+      }
+      dir.normalize();
+      pts.push(p.clone().addScaledVector(dir, ds));
+    }
+    const radii = pts.map((_, i) => lerp2(o.r0, o.r1, Math.pow(i / steps, 0.85)));
+    pts.push(pts[steps].clone().addScaledVector(dir, Math.max(0.015, o.r1 * 1.5)));
+    radii.push(8e-4);
+    const br = {
+      parent: o.parent,
+      depth: o.depth,
+      kind: o.kind || "branch",
+      pts,
+      radii,
+      gnarl: o.gnarl ?? R.gnarlByDepth[o.depth],
+      lobes: o.lobes || null
+    };
+    const id = registerBranch(br);
+    if (o.depth >= 2) addLeafAnchors(br);
+    if (o.depth >= 1 && o.depth < R.maxDepth && o.r1 > R.minRadius) {
+      const cum = arcTable(pts), total = cum[steps];
+      const childDepth = o.depth + 1;
+      const spacing = R.spacing[o.depth];
+      const lenTab = R.lenByDepth[childDepth];
+      let phi = rr(0, Math.PI * 2);
+      for (let s = total * rr(0.28, 0.4); s < total * 0.92; s += spacing * rr(0.8, 1.3)) {
+        let i = 1;
+        while (i < steps && cum[i] < s) i++;
+        const f = (s - cum[i - 1]) / Math.max(1e-6, cum[i] - cum[i - 1]);
+        const p = pts[i - 1].clone().lerp(pts[i], f);
+        const rHere = lerp2(radii[i - 1], radii[i], f);
+        const T = pts[i].clone().sub(pts[i - 1]).normalize();
+        const up = Math.abs(T.y) > 0.92 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0);
+        const N = up.clone().addScaledVector(T, -up.dot(T)).normalize();
+        const B = new THREE.Vector3().crossVectors(T, N);
+        phi += Math.PI + rr(-0.9, 0.9);
+        const cd = T.clone().multiplyScalar(0.55).addScaledVector(N, Math.cos(phi) * 0.9).addScaledVector(B, Math.sin(phi) * 0.9).add(new THREE.Vector3(0, R.upBias, 0)).normalize();
+        const cr0 = Math.min(rHere * rr(R.childRadius[0], R.childRadius[1]), rHere * 0.85);
+        if (cr0 < R.minRadius) continue;
+        growBranch({
+          start: p.clone().addScaledVector(cd, -rHere * 0.4),
+          dir: cd,
+          len: rr(lenTab[0], lenTab[1]),
+          r0: cr0,
+          r1: childDepth === R.maxDepth ? 45e-4 : cr0 * rr(0.28, 0.4),
+          depth: childDepth,
+          parent: id,
+          domeOff: (o.domeOff || 0) + rr(-0.04, 0.04),
+          wig: R.wig[childDepth],
+          steer: R.steer[childDepth]
+        });
+      }
+      const endT = pts[steps].clone().sub(pts[steps - 1]).normalize();
+      const perp = new THREE.Vector3(rr(-1, 1), rr(-0.3, 0.3), rr(-1, 1)).cross(endT);
+      if (perp.lengthSq() < 1e-4) perp.set(1, 0, 0);
+      perp.normalize();
+      const endR = o.r1;
+      for (const sgn of [1, -1]) {
+        const a = sgn * rr(0.28, 0.6);
+        const cd = endT.clone().applyAxisAngle(perp, a).normalize();
+        const cr0 = endR * rr(0.7, 0.85);
+        if (cr0 < 5e-3) continue;
+        growBranch({
+          start: pts[steps].clone().addScaledVector(cd, -endR * 0.3),
+          dir: cd,
+          len: rr(lenTab[0], lenTab[1]) * rr(0.85, 1.1),
+          r0: cr0,
+          r1: childDepth === R.maxDepth ? 45e-4 : cr0 * rr(0.28, 0.4),
+          depth: childDepth,
+          parent: id,
+          domeOff: (o.domeOff || 0) + rr(-0.04, 0.04),
+          wig: R.wig[childDepth],
+          steer: R.steer[childDepth]
+        });
+      }
+    }
+    const ST = S.strands;
+    if (ST && br.kind === "branch" && o.depth === (ST.fromDepth ?? R.maxDepth)) {
+      const nS = Math.round(rr(ST.perTip[0], ST.perTip[1]));
+      const cum2 = arcTable(pts), total2 = cum2[cum2.length - 1];
+      for (let k = 0; k < nS; k++) {
+        const s = total2 * rr(0.35, 1);
+        let i2 = 1;
+        while (i2 < cum2.length - 1 && cum2[i2] < s) i2++;
+        const f2 = (s - cum2[i2 - 1]) / Math.max(1e-6, cum2[i2] - cum2[i2 - 1]);
+        const start = pts[i2 - 1].clone().lerp(pts[i2], f2);
+        const Tv = pts[i2].clone().sub(pts[i2 - 1]).normalize();
+        const len = rr(ST.len[0], ST.len[1]);
+        const d = Tv.clone().multiplyScalar(0.45).add(new THREE.Vector3(rr(-0.3, 0.3), -0.35, rr(-0.3, 0.3))).normalize();
+        const stepsS = clamp(Math.round(len / 0.07), 5, 18);
+        const dsS = len / stepsS;
+        const sway = ST.sway ?? 0.1, grav = ST.gravity ?? 0.45;
+        const sp = [start.clone()];
+        const seedS = branches.length * 3.77 + 6.1;
+        for (let j = 1; j <= stepsS; j++) {
+          const p2 = sp[j - 1];
+          d.x += (fbm(p2.x * 2.3 + seedS, p2.y * 2.3, p2.z * 2.3, 3) - 0.5) * sway;
+          d.z += (fbm(p2.x * 2.3, p2.y * 2.3 + seedS, p2.z * 2.3 + 3.3, 3) - 0.5) * sway;
+          d.y -= grav * 0.22;
+          d.normalize();
+          const nxt = p2.clone().addScaledVector(d, dsS);
+          if (nxt.y < 0.06) break;
+          sp.push(nxt);
+        }
+        if (sp.length < 3) continue;
+        const r0S = ST.r0 ?? 7e-3;
+        const rS = sp.map((_, j) => lerp2(r0S, 16e-4, j / (sp.length - 1)));
+        const sbr = {
+          parent: id,
+          depth: o.depth + 1,
+          kind: "strand",
+          pts: sp,
+          radii: rS,
+          gnarl: ST.gnarl ?? 0.05,
+          lobes: null
+        };
+        registerBranch(sbr);
+        addLeafAnchors(sbr);
+      }
+    }
+    return id;
+  }
+  function trunkPointAt(t) {
+    const i = clamp(Math.floor(t * 12), 0, 11);
+    const f = t * 12 - i;
+    return { p: trunkPts[i].clone().lerp(trunkPts[i + 1], f), r: lerp2(trunkRadii[i], trunkRadii[i + 1], f) };
+  }
+  const leanAz = rr(0, Math.PI * 2);
+  const lean = new THREE.Vector3(Math.cos(leanAz), 0, Math.sin(leanAz)).multiplyScalar(S.trunk.lean);
+  const TRUNK_H = S.trunk.height, TRUNK_R0 = S.trunk.r0, TRUNK_R1 = S.trunk.r1;
+  {
+    const stepsT = 12;
+    for (let i = 0; i <= stepsT; i++) {
+      const t = i / stepsT;
+      const wx = (fbm(t * 2.5 + 3.1, 7.7, 1.2, 3) - 0.5) * S.trunk.wobble;
+      const wz = (fbm(1.9, t * 2.5 + 5.3, 8.8, 3) - 0.5) * S.trunk.wobble;
+      trunkPts.push(new THREE.Vector3(lean.x * t * t + wx * t, -0.03 + (TRUNK_H + 0.03) * t, lean.z * t * t + wz * t));
+      trunkRadii.push(lerp2(TRUNK_R0, TRUNK_R1, Math.pow(t, S.trunk.radiusPow)));
+    }
+  }
+  const trunk = {
+    parent: -1,
+    depth: 0,
+    kind: "trunk",
+    pts: trunkPts,
+    radii: trunkRadii,
+    gnarl: S.trunk.gnarl,
+    lobes: {
+      count: S.trunk.lobes.count,
+      phase: rr(0, Math.PI * 2),
+      base: S.trunk.lobes.base,
+      amp: S.trunk.lobes.amp,
+      sharp: S.trunk.lobes.sharp,
+      span: S.trunk.lobes.span,
+      mode: S.trunk.lobes.mode
+    }
+  };
+  const trunkId = registerBranch(trunk);
+  const GOLD = Math.PI * (3 - Math.sqrt(5));
+  {
+    const SC = S.scaffolds || {};
+    const nLow = SC.low ?? 1, nUpper = SC.upper ?? 5, nApex = SC.apex ?? 3;
+    const elevR = SC.elevation || [0.3, 0.55];
+    const lowLen = SC.lowLen ?? 1.25, upperLen = SC.upperLen || [1.25, 1.7], apexLen = SC.apexLen || [0.45, 0.7];
+    const lowAt = SC.lowAt ?? 0.6, upperAt = SC.upperAt || [0.8, 1];
+    const lowY = SC.lowElev ?? 0.28;
+    const lowR0 = SC.lowR0 || [0.42, 0.5], upperR0 = SC.upperR0 || [0.5, 0.62], apexR0 = SC.apexR0 || [0.42, 0.5];
+    const lowDome = SC.lowDomeOff || [-0.3, -0.15], upperDome = SC.upperDomeOff || [-0.12, 0.15], apexDome = SC.apexDomeOff || [0, 0.1];
+    const az0 = rr(0, Math.PI * 2);
+    for (let i = 0; i < nLow; i++) {
+      const az = i === 0 ? az0 : az0 + 2.3 * i + rr(-0.3, 0.3);
+      const at = trunkPointAt(lowAt);
+      const d0 = new THREE.Vector3(Math.cos(az), lowY, Math.sin(az)).normalize();
+      scaffoldIds.push(growBranch({
+        start: at.p.clone().addScaledVector(d0, -at.r * 0.35),
+        dir: d0,
+        len: lowLen,
+        r0: at.r * rr(lowR0[0], lowR0[1]),
+        r1: 0.028,
+        depth: 1,
+        parent: trunkId,
+        wig: 0.1,
+        steer: 0.8,
+        domeOff: rr(lowDome[0], lowDome[1])
+      }));
+    }
+    for (let i = 0; i < nUpper; i++) {
+      const az = az0 + GOLD * (i + 1) + rr(-0.35, 0.35);
+      const at2 = trunkPointAt(rr(upperAt[0], upperAt[1]));
+      const elev = rr(elevR[0], elevR[1]);
+      const d = new THREE.Vector3(Math.cos(az) * Math.cos(elev), Math.sin(elev), Math.sin(az) * Math.cos(elev)).normalize();
+      scaffoldIds.push(growBranch({
+        start: at2.p.clone().addScaledVector(d, -at2.r * 0.35),
+        dir: d,
+        len: rr(upperLen[0], upperLen[1]),
+        r0: at2.r * rr(upperR0[0], upperR0[1]),
+        r1: 0.03,
+        depth: 1,
+        parent: trunkId,
+        wig: 0.1,
+        steer: 1,
+        domeOff: rr(upperDome[0], upperDome[1])
+      }));
+    }
+    for (let i = 0; i < nApex; i++) {
+      const az = rr(0, Math.PI * 2);
+      const d = new THREE.Vector3(Math.cos(az) * 0.4, 1, Math.sin(az) * 0.4).normalize();
+      const at3 = trunkPointAt(1);
+      scaffoldIds.push(growBranch({
+        start: at3.p.clone().addScaledVector(d, -at3.r * 0.3),
+        dir: d,
+        len: rr(apexLen[0], apexLen[1]),
+        r0: at3.r * rr(apexR0[0], apexR0[1]),
+        r1: 0.025,
+        depth: 1,
+        parent: trunkId,
+        wig: 0.1,
+        steer: 1,
+        domeOff: rr(apexDome[0], apexDome[1])
+      }));
+    }
+  }
+  const PR = S.propRoots;
+  if (PR) {
+    const PROP_COUNT = PR.count;
+    const cands = [];
+    for (const sid of scaffoldIds) {
+      const br = branches[sid];
+      const cum = arcTable(br.pts), total = cum[cum.length - 1];
+      for (let tf = 0.4; tf <= 0.85; tf += 0.15) {
+        const s = total * tf;
+        let i = 1;
+        while (i < cum.length - 1 && cum[i] < s) i++;
+        const f = (s - cum[i - 1]) / Math.max(1e-6, cum[i] - cum[i - 1]);
+        const p = br.pts[i - 1].clone().lerp(br.pts[i], f);
+        const r = lerp2(br.radii[i - 1], br.radii[i], f);
+        const rad = Math.hypot(p.x, p.z);
+        if (p.y > PR.eligibility.minY && rad > PR.eligibility.minRad && rad < PR.eligibility.maxRad)
+          cands.push({ p, limbR: r, az: Math.atan2(p.z, p.x), parent: sid });
+      }
+    }
+    cands.sort(() => rand() - 0.5);
+    const chosen = [];
+    for (const minSep of PR.minAzimuthSep) {
+      for (const c of cands) {
+        if (chosen.length >= PROP_COUNT) break;
+        if (chosen.includes(c)) continue;
+        let ok = true;
+        for (const q of chosen) {
+          let d = Math.abs(c.az - q.az);
+          d = Math.min(d, Math.PI * 2 - d);
+          if (d < minSep) {
+            ok = false;
+            break;
+          }
+        }
+        if (ok) chosen.push(c);
+      }
+      if (chosen.length >= PROP_COUNT) break;
+    }
+    let thickLeft = PR.thick;
+    for (const c of chosen) {
+      const isThick = thickLeft-- > 0;
+      const topR = rr(PR.topR[0], PR.topR[1]);
+      const botR = isThick ? rr(PR.thickR[0], PR.thickR[1]) : rr(PR.thinR[0], PR.thinR[1]);
+      const drop = c.p.y;
+      const steps2 = Math.max(8, Math.round(drop / 0.12));
+      const pts = [c.p.clone()];
+      const radii = [Math.min(c.limbR * 0.9, 0.055)];
+      const seed = branches.length * 3.77;
+      const driftAz = rr(0, Math.PI * 2), driftAmt = rr(-0.02, 0.12);
+      for (let i = 1; i <= steps2; i++) {
+        const t = i / steps2;
+        const prev = pts[i - 1];
+        const sx = (fbm(prev.x * 3 + seed, t * 4, prev.z * 3, 3) - 0.5) * 0.08;
+        const sz = (fbm(prev.x * 3, t * 4 + seed, prev.z * 3 + 2.2, 3) - 0.5) * 0.08;
+        pts.push(new THREE.Vector3(
+          c.p.x + Math.cos(driftAz) * driftAmt * t + sx * Math.sin(t * Math.PI),
+          c.p.y * (1 - t),
+          c.p.z + Math.sin(driftAz) * driftAmt * t + sz * Math.sin(t * Math.PI)
+        ));
+        radii.push(lerp2(topR, botR, THREE.MathUtils.smoothstep(t, 0.45, 0.95)));
+      }
+      pts.push(pts[steps2].clone().setY(-0.05));
+      radii.push(botR * 0.9);
+      const br = {
+        parent: c.parent,
+        depth: 1,
+        kind: "prop",
+        pts,
+        radii,
+        gnarl: PR.gnarl,
+        lobes: { count: Math.floor(rr(4, 7)), phase: rr(0, Math.PI * 2), base: 0.5, amp: 0.55, sharp: 2.2, span: 0.16, mode: "end" }
+      };
+      propRootIds.push(registerBranch(br));
+      const feet = PR.feet;
+      for (let k = 0; k < feet; k++) {
+        const fz = rr(0, Math.PI * 2);
+        const fd = new THREE.Vector3(Math.cos(fz), 0, Math.sin(fz));
+        const fl = rr(0.12, 0.28);
+        const fpts = [], fradii = [];
+        const base = pts[steps2].clone().setY(botR * 0.5);
+        const fsteps = 4;
+        for (let i2 = 0; i2 <= fsteps; i2++) {
+          const t2 = i2 / fsteps;
+          fpts.push(base.clone().addScaledVector(fd, fl * t2).setY(Math.max(6e-3, botR * 0.5 * (1 - t2) * (1 - t2))));
+          fradii.push(lerp2(botR * 0.45, 4e-3, Math.pow(t2, 0.7)));
+        }
+        registerBranch({ parent: branches.length - 1, depth: 2, kind: "root", pts: fpts, radii: fradii, gnarl: 0.18, lobes: null });
+      }
+    }
+  }
+  const SR = S.surfaceRoots;
+  if (SR) {
+    const N_ROOTS = SR.count;
+    const az0 = rr(0, Math.PI * 2);
+    for (let i = 0; i < N_ROOTS; i++) {
+      const az = az0 + i / N_ROOTS * Math.PI * 2 + rr(-0.25, 0.25);
+      const dirH = new THREE.Vector3(Math.cos(az), 0, Math.sin(az));
+      const len = rr(SR.length[0], SR.length[1]);
+      const r0 = rr(SR.r0[0], SR.r0[1]);
+      const startH = rr(SR.startHeight[0], SR.startHeight[1]);
+      const stepsR = 6;
+      const pts = [], radii = [];
+      const seed = branches.length * 3.77;
+      for (let k = 0; k <= stepsR; k++) {
+        const t = k / stepsR;
+        const meander = (fbm(t * 3 + seed, seed * 0.3, t * 2.7, 3) - 0.5) * 0.22 * t;
+        const perp = new THREE.Vector3(-dirH.z, 0, dirH.x);
+        pts.push(new THREE.Vector3(0, 0, 0).addScaledVector(dirH, 0.16 + len * t).addScaledVector(perp, meander).setY(Math.max(6e-3, startH * Math.pow(1 - t, 1.7))));
+        radii.push(lerp2(r0, 5e-3, Math.pow(t, 0.75)));
+      }
+      registerBranch({ parent: trunkId, depth: 1, kind: "root", pts, radii, gnarl: SR.gnarl, lobes: null });
+    }
+  }
+  return { branches, anchors, trunkPts, trunkRadii, scaffoldIds, propRootIds };
+}
+
+// src/mesher.js
+import * as THREE2 from "three";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+var clamp2 = THREE2.MathUtils.clamp;
+var lerp3 = THREE2.MathUtils.lerp;
+var smoothstep = THREE2.MathUtils.smoothstep;
+function computeFrames(pts) {
+  const n = pts.length, T = [], N = [], B = [];
+  for (let i = 0; i < n; i++) {
+    const a = pts[Math.max(0, i - 1)], b = pts[Math.min(n - 1, i + 1)];
+    T.push(new THREE2.Vector3().subVectors(b, a).normalize());
+  }
+  const up = Math.abs(T[0].y) > 0.92 ? new THREE2.Vector3(1, 0, 0) : new THREE2.Vector3(0, 1, 0);
+  let N0 = up.clone().addScaledVector(T[0], -up.dot(T[0])).normalize();
+  N.push(N0);
+  B.push(new THREE2.Vector3().crossVectors(T[0], N0).normalize());
+  const q = new THREE2.Quaternion();
+  for (let i = 1; i < n; i++) {
+    q.setFromUnitVectors(T[i - 1], T[i]);
+    const Ni = N[i - 1].clone().applyQuaternion(q);
+    Ni.addScaledVector(T[i], -Ni.dot(T[i])).normalize();
+    N.push(Ni);
+    B.push(new THREE2.Vector3().crossVectors(T[i], Ni).normalize());
+  }
+  return { T, N, B };
+}
+function flareAt(br, pts, i, cum, total) {
+  const lob = br.lobes;
+  if (!lob) return 0;
+  if (lob.mode === "ground") return Math.pow(Math.max(0, 1 - pts[i].y / lob.span), 1.6);
+  return Math.pow(Math.max(0, 1 - (total - cum[i]) / lob.span), 1.6);
+}
+function tubeGeometry(br, maxRadialSegs = 26) {
+  let pts = br.pts, radii = br.radii;
+  if (br.kind === "root" || br.kind === "prop") {
+    const tipFloor = br.kind === "root" ? 0.016 : 0.02;
+    radii = radii.map((r) => Math.max(r, tipFloor));
+    const last = pts[pts.length - 1], prev = pts[pts.length - 2];
+    const dir = last.clone().sub(prev).normalize();
+    pts = pts.concat([last.clone().addScaledVector(dir, tipFloor * 0.9)]);
+    radii = radii.concat([tipFloor * 0.35]);
+  }
+  if (br.kind === "trunk") {
+    const last = pts[pts.length - 1], prev = pts[pts.length - 2];
+    const dir = last.clone().sub(prev).normalize();
+    const r = radii[radii.length - 1];
+    pts = pts.concat([
+      last.clone().addScaledVector(dir, r * 0.45),
+      last.clone().addScaledVector(dir, r * 0.8),
+      last.clone().addScaledVector(dir, r * 1)
+    ]);
+    radii = radii.concat([r * 0.62, r * 0.3, 8e-3]);
+  }
+  const n = pts.length;
+  const { T, N, B } = computeFrames(pts);
+  const maxR = Math.max(...radii);
+  const segs = Math.min(maxRadialSegs, maxR > 0.16 ? 26 : maxR > 0.08 ? 16 : maxR > 0.035 ? 11 : maxR > 0.016 ? 8 : 6);
+  const cum = arcTable(pts), total = cum[n - 1];
+  const collarAmt = br.kind === "branch" ? 0.85 : 0;
+  const collarSpan = total * 0.25;
+  const rootLike = br.kind === "root" || br.kind === "prop";
+  const posA = [], norA = [], uvA = [], colA = [], idx = [];
+  const rad = new THREE2.Vector3(), nrm = new THREE2.Vector3();
+  for (let i = 0; i < n; i++) {
+    const iP = Math.max(0, i - 1), iN = Math.min(n - 1, i + 1);
+    const slope = (radii[iP] - radii[iN]) / Math.max(1e-5, cum[iN] - cum[iP]);
+    const f = flareAt(br, pts, i, cum, total);
+    let collarMul = 1, collarAo = 1;
+    if (collarAmt > 0 && collarSpan > 1e-5) {
+      const tc = clamp2(cum[i] / collarSpan, 0, 1);
+      const swell = collarAmt * (1 - tc) * (1 - tc);
+      collarMul = 1 + swell;
+      collarAo = 1 - swell * 0.55;
+    }
+    for (let j = 0; j <= segs; j++) {
+      const th = j / segs * Math.PI * 2;
+      const cs = Math.cos(th), sn = Math.sin(th);
+      rad.set(0, 0, 0).addScaledVector(N[i], cs).addScaledVector(B[i], sn);
+      let mul = 1, ao = 1;
+      if (br.lobes && f > 1e-4) {
+        const w = Math.pow(0.5 + 0.5 * Math.sin(th * br.lobes.count + br.lobes.phase), br.lobes.sharp);
+        mul = 1 + f * (br.lobes.base + br.lobes.amp * w);
+        ao = 1 - f * (1 - w) * 0.42;
+      }
+      let g = 1 + br.gnarl * (fbm(cs * 1.3 + br.id * 0.719, cum[i] * 2.4, sn * 1.3 - br.id * 0.377, 3) - 0.5) * 2;
+      g = Math.max(0.62, g);
+      let rootMul = 1, rootAo = 1, horizSpread = 1, vertSquash = 1;
+      if (rootLike && total > 1e-5) {
+        const startCollar = Math.pow(1 - clamp2(cum[i] / Math.min(0.18, total), 0, 1), 2);
+        const groundBlend = Math.pow(1 - smoothstep(0.01, 0.18, pts[i].y), 1.4);
+        const endBlend = Math.pow(clamp2(cum[i] / total, 0, 1), 2);
+        const rootCollar = (br.kind === "prop" ? startCollar * 0.18 : startCollar * 0.32) + groundBlend * endBlend * 0.16;
+        rootMul += rootCollar;
+        rootAo -= Math.min(0.24, rootCollar * 0.34 + groundBlend * 0.06);
+        horizSpread += groundBlend * endBlend * 0.12;
+        vertSquash -= groundBlend * endBlend * 0.08;
+      }
+      const Rr = Math.max(6e-4, radii[i] * mul * g * collarMul * rootMul);
+      let px = pts[i].x + rad.x * Rr * horizSpread;
+      let py = pts[i].y + rad.y * Rr * vertSquash;
+      let pz = pts[i].z + rad.z * Rr * horizSpread;
+      if (rootLike && pts[i].y < 0.035 && rad.y < -0.35) py = Math.max(-4e-3, py);
+      posA.push(px, py, pz);
+      nrm.copy(rad).addScaledVector(T[i], slope).normalize();
+      norA.push(nrm.x, nrm.y, nrm.z);
+      uvA.push(j / segs, cum[i] * 1.6);
+      const gAo = ao * collarAo * rootAo * clamp2(0.72 + pts[i].y * 1.8, 0.72, 1);
+      colA.push(gAo, gAo, gAo);
+    }
+  }
+  for (let i = 0; i < n - 1; i++) for (let j = 0; j < segs; j++) {
+    const a = i * (segs + 1) + j, b = a + segs + 1;
+    idx.push(a, a + 1, b, a + 1, b + 1, b);
+  }
+  const geo = new THREE2.BufferGeometry();
+  geo.setAttribute("position", new THREE2.Float32BufferAttribute(posA, 3));
+  geo.setAttribute("normal", new THREE2.Float32BufferAttribute(norA, 3));
+  geo.setAttribute("uv", new THREE2.Float32BufferAttribute(uvA, 2));
+  geo.setAttribute("color", new THREE2.Float32BufferAttribute(colA, 3));
+  geo.setIndex(idx);
+  return geo;
+}
+function buildWoodGeometry(branches, maxRadialSegs = 26) {
+  return mergeGeometries(branches.map((br) => tubeGeometry(br, maxRadialSegs)));
+}
+
+// src/materials.js
+import * as THREE3 from "three";
+function makeBarkMaterial(S) {
+  const Bk = S.bark;
+  const smooth = Bk.style === "smooth";
+  const BARKH_GLSL = smooth ? `
+uniform vec3 uLentic;
+float barkH(){
+  float ang = vBUv.x*6.2831853;
+  vec3 cyl = vec3(cos(ang)*1.55, vBUv.y*1.05, sin(ang)*1.55);
+  float broad = bfbm(cyl*vec3(uStria, 0.45, uStria));
+  float band  = bnoise(vec3(2.7, vBUv.y*uMottle*1.6, 3.9));
+  return broad*0.55 + band*0.45;
+}
+float lenticels(){
+  float d = bnoise(vec3(vBUv.x*uStria*6.0, vBUv.y*uMottle*9.0, 8.5));
+  return smoothstep(0.70, 0.82, d) * (1.0 - smoothstep(0.84, 0.94, d));
+}` : `
+float barkH(){
+  float ang = vBUv.x*6.2831853;
+  vec3 cyl = vec3(cos(ang)*1.55, vBUv.y*1.05, sin(ang)*1.55);
+  float stria = bfbm(cyl*vec3(uStria, 1.0, uStria));
+  float mott  = bfbm(vWP*uMottle);
+  float fine  = bnoise(vWP*52.0);
+  return stria*0.60 + mott*0.28 + fine*0.12;
+}`;
+  const MAP_GLSL = smooth ? `
+{
+  gBarkH = barkH();
+  float crack = barkCrackMask()*uBarkCrack;
+  float knot = barkKnotMask()*uBarkKnot;
+  float macro = bfbm(vWP*vec3(0.72, 0.36, 0.72) + vec3(6.0, 1.0, 2.0))*uBarkMacro;
+  gBarkH = clamp(gBarkH + uBarkRelief*(knot*0.18 - crack*0.22), 0.0, 1.0);
+  vec3 bark = mix(uCrevice, uRidge, smoothstep(0.18, 0.85, gBarkH));
+  bark = mix(bark, bark*vec3(1.06, 0.99, 0.96), smoothstep(0.6, 0.9, bfbm(vWP*1.8))*0.35);
+  bark = mix(bark, uCrevice*0.62, crack*0.72);
+  bark = mix(bark, uRidge*vec3(1.14, 1.08, 0.98), knot*0.38);
+  bark *= 0.92 + 0.22*macro;
+  bark = mix(bark, uLentic, lenticels()*0.75);
+  diffuseColor.rgb = bark;
+}` : `
+{
+  gBarkH = barkH();
+  float crack = barkCrackMask()*uBarkCrack;
+  float knot = barkKnotMask()*uBarkKnot;
+  float macro = bfbm(vWP*vec3(0.68, 0.34, 0.68) + vec3(6.0, 1.0, 2.0))*uBarkMacro;
+  gBarkH = clamp(gBarkH + uBarkRelief*(knot*0.16 - crack*0.26), 0.0, 1.0);
+  vec3 crev = uCrevice;
+  vec3 ridg = uRidge;
+  vec3 bark = mix(crev, ridg, smoothstep(0.22, 0.78, gBarkH));
+  bark = mix(bark, bark*vec3(0.9, 1.02, 0.88), smoothstep(0.62, 0.9, bfbm(vWP*2.6))*0.45);
+  bark = mix(bark, crev*0.50, crack*0.82);
+  bark = mix(bark, ridg*vec3(1.20, 1.12, 1.02), knot*0.42);
+  bark *= 0.90 + 0.24*macro;
+  diffuseColor.rgb = bark;
+}`;
+  const mat = new THREE3.MeshStandardMaterial({
+    color: 16777215,
+    roughness: 0.87,
+    metalness: 0,
+    vertexColors: true,
+    envMapIntensity: 0.25
+  });
+  mat.userData.barkVisualDetail = { macro: 0, cracks: 0, knots: 0, relief: 0 };
+  mat.onBeforeCompile = (sh) => {
+    const detail = mat.userData.barkVisualDetail || {};
+    sh.uniforms.uBumpAmt = { value: Bk.bump };
+    sh.uniforms.uStria = { value: Bk.striaScale };
+    sh.uniforms.uMottle = { value: Bk.mottleScale };
+    sh.uniforms.uCrevice = { value: new THREE3.Vector3(Bk.crevice[0], Bk.crevice[1], Bk.crevice[2]) };
+    sh.uniforms.uRidge = { value: new THREE3.Vector3(Bk.ridge[0], Bk.ridge[1], Bk.ridge[2]) };
+    sh.uniforms.uBarkMacro = { value: detail.macro ?? 0 };
+    sh.uniforms.uBarkCrack = { value: detail.cracks ?? 0 };
+    sh.uniforms.uBarkKnot = { value: detail.knots ?? 0 };
+    sh.uniforms.uBarkRelief = { value: detail.relief ?? 0 };
+    if (smooth) {
+      const lc = Bk.lenticel || [0.42, 0.36, 0.33];
+      sh.uniforms.uLentic = { value: new THREE3.Vector3(lc[0], lc[1], lc[2]) };
+    }
+    sh.vertexShader = sh.vertexShader.replace("#include <common>", "#include <common>\nvarying vec3 vWP;\nvarying vec2 vBUv;").replace("#include <project_vertex>", "#include <project_vertex>\nvWP = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvBUv = uv;");
+    sh.fragmentShader = sh.fragmentShader.replace("#include <common>", `#include <common>
+varying vec3 vWP; varying vec2 vBUv;
+uniform float uBumpAmt;
+uniform float uStria;
+uniform float uMottle;
+uniform float uBarkMacro;
+uniform float uBarkCrack;
+uniform float uBarkKnot;
+uniform float uBarkRelief;
+uniform vec3 uCrevice;
+uniform vec3 uRidge;
+float gBarkH;
+float bhash(vec3 p){ p = fract(p*0.3183099 + vec3(0.1,0.2,0.3)); p *= 17.0; return fract(p.x*p.y*p.z*(p.x+p.y+p.z)); }
+float bnoise(vec3 p){ vec3 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
+  return mix(mix(mix(bhash(i),bhash(i+vec3(1,0,0)),f.x), mix(bhash(i+vec3(0,1,0)),bhash(i+vec3(1,1,0)),f.x), f.y),
+             mix(mix(bhash(i+vec3(0,0,1)),bhash(i+vec3(1,0,1)),f.x), mix(bhash(i+vec3(0,1,1)),bhash(i+vec3(1,1,1)),f.x), f.y), f.z); }
+float bfbm(vec3 p){ float a = 0.5, s = 0.0; for(int i=0;i<4;i++){ s += a*bnoise(p); p *= 2.03; a *= 0.5; } return s*1.07; }
+float barkCrackMask(){
+  float flow = bfbm(vWP*vec3(0.65, 1.8, 0.65) + vec3(2.1, 0.0, 7.4));
+  float seam = abs(fract(vBUv.x*uStria*2.4 + flow*0.38) - 0.5);
+  float broken = smoothstep(0.34, 0.86, bfbm(vec3(vBUv.x*10.0, vBUv.y*uMottle*0.62, 3.7)));
+  return (1.0 - smoothstep(0.018, 0.082, seam)) * broken;
+}
+float barkKnotMask(){
+  float pores = bfbm(vWP*vec3(2.0, 0.72, 2.0) + vec3(4.0, 9.0, 1.0));
+  float rings = abs(bfbm(vWP*vec3(4.8, 1.1, 4.8)) - 0.56);
+  return smoothstep(0.72, 0.92, pores) * (1.0 - smoothstep(0.07, 0.22, rings));
+}
+${BARKH_GLSL}`).replace("#include <map_fragment>", `#include <map_fragment>
+${MAP_GLSL}`).replace("#include <roughnessmap_fragment>", smooth ? `#include <roughnessmap_fragment>
+roughnessFactor = clamp(roughnessFactor - (gBarkH-0.5)*0.3 - lenticels()*0.1, 0.35, 1.0);` : `#include <roughnessmap_fragment>
+roughnessFactor = clamp(roughnessFactor - (gBarkH-0.5)*0.18, 0.55, 1.0);`).replace("#include <normal_fragment_maps>", `#include <normal_fragment_maps>
+{
+  vec3 sp = -vViewPosition;
+  vec3 sx = dFdx(sp), sy = dFdy(sp);
+  vec3 r1 = cross(sy, normal), r2 = cross(normal, sx);
+  float det = dot(sx, r1);
+  float reliefH = gBarkH + uBarkRelief*(barkCrackMask()*0.75 + barkKnotMask()*0.34);
+  vec3 grad = sign(det) * (dFdx(reliefH) * r1 + dFdy(reliefH) * r2);
+  normal = normalize(abs(det) * normal - uBumpAmt * 0.012 * grad);
+}`);
+    mat.userData.shader = sh;
+  };
+  return mat;
+}
+function makeLeafMaterial() {
+  const leafMat2 = new THREE3.MeshPhysicalMaterial({
+    color: 16777215,
+    roughness: 0.46,
+    metalness: 0,
+    side: THREE3.DoubleSide,
+    clearcoat: 0.25,
+    clearcoatRoughness: 0.32,
+    sheen: 0.15,
+    sheenColor: new THREE3.Color(9416294),
+    sheenRoughness: 0.6,
+    envMapIntensity: 0.25
+  });
+  leafMat2.userData.leafVisualDetail = { variation: 0, edge: 1, vein: 1, subsurface: 1 };
+  leafMat2.onBeforeCompile = (sh) => {
+    const detail = leafMat2.userData.leafVisualDetail || {};
+    sh.uniforms.uSunView = { value: new THREE3.Vector3(0, 1, 0) };
+    sh.uniforms.uSunColor = { value: new THREE3.Color(16773602).multiplyScalar(0.16) };
+    sh.uniforms.uLeafVar = { value: detail.variation ?? 0 };
+    sh.uniforms.uLeafEdge = { value: detail.edge ?? 1 };
+    sh.uniforms.uLeafVein = { value: detail.vein ?? 1 };
+    sh.uniforms.uLeafSubsurface = { value: detail.subsurface ?? 1 };
+    sh.vertexShader = sh.vertexShader.replace("#include <common>", `#include <common>
+attribute vec4 aLeafMorph;
+varying vec2 vLUv;
+varying vec4 vLeafMorph;
+uniform float uLeafVar;`).replace("#include <uv_vertex>", "#include <uv_vertex>\nvLUv = uv;").replace("#include <begin_vertex>", `#include <begin_vertex>
+vLeafMorph = aLeafMorph;
+{
+  float morph = clamp(uLeafVar, 0.0, 1.0);
+  float u = clamp(uv.x, 0.0, 1.0);
+  float side = uv.y*2.0 - 1.0;
+  float blade = sin(3.14159265*u);
+  float lenScale = mix(1.0, 0.88 + 0.24*aLeafMorph.x, morph);
+  float widthScale = mix(1.0, 0.78 + 0.42*aLeafMorph.y, morph);
+  transformed.x *= lenScale;
+  transformed.z *= widthScale;
+  float twist = (aLeafMorph.z - 0.5) * morph * 0.30 * blade;
+  float c = cos(twist), s = sin(twist);
+  transformed.yz = vec2(transformed.y*c - transformed.z*s, transformed.y*s + transformed.z*c);
+  transformed.y += morph * blade * ((aLeafMorph.w - 0.5)*0.018 + side*side*(aLeafMorph.z - 0.5)*0.018);
+}`);
+    sh.fragmentShader = sh.fragmentShader.replace("#include <common>", `#include <common>
+varying vec2 vLUv;
+varying vec4 vLeafMorph;
+uniform vec3 uSunView;
+uniform vec3 uSunColor;
+uniform float uLeafVar;
+uniform float uLeafEdge;
+uniform float uLeafVein;
+uniform float uLeafSubsurface;`).replace("#include <color_fragment>", `#include <color_fragment>
+{
+  float u = vLUv.x;
+  float v = vLUv.y - 0.5;
+  float av = abs(v);
+  float mid = (1.0 - smoothstep(0.0, 0.045, av)) * (1.0 - smoothstep(0.72, 0.98, u));
+  float d = abs(fract(u*13.0 - av*1.9) - 0.5);
+  float lat = (1.0 - smoothstep(0.03, 0.09, d));
+  lat *= 1.0 - smoothstep(0.30, 0.46, av);
+  lat *= smoothstep(0.03, 0.12, u) * (1.0 - smoothstep(0.80, 0.97, u));
+  float veins = clamp(mid*0.9 + lat*0.5, 0.0, 1.0);
+  diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb*vec3(1.55,1.45,1.05) + vec3(0.012), veins*0.30*uLeafVein);
+  diffuseColor.rgb *= 1.0 - 0.16*smoothstep(0.40, 0.5, av);
+  float edge = smoothstep(0.36, 0.50, av);
+  float freckle = fract(u*7.0 + vLeafMorph.x*5.0 + vLeafMorph.y*3.0 + vLeafMorph.z*2.0);
+  diffuseColor.rgb *= 1.0 - uLeafVar*uLeafEdge*edge*(0.035 + 0.075*vLeafMorph.w);
+  diffuseColor.rgb *= 1.0 + uLeafVar*0.055*(freckle - 0.5)*(1.0 - edge*0.45);
+  if (!gl_FrontFacing) diffuseColor.rgb = diffuseColor.rgb*vec3(0.78,0.88,0.70) + vec3(0.045,0.06,0.028);
+}`).replace("#include <roughnessmap_fragment>", `#include <roughnessmap_fragment>
+roughnessFactor = clamp(roughnessFactor + uLeafVar*(smoothstep(0.36, 0.50, abs(vLUv.y - 0.5))*0.09 - 0.04), 0.30, 1.0);
+if (!gl_FrontFacing) roughnessFactor = min(1.0, roughnessFactor + 0.32);`).replace("#include <lights_fragment_end>", `#include <lights_fragment_end>
+{
+  float backlit = clamp(-dot(normal, uSunView), 0.0, 1.0);
+  reflectedLight.indirectDiffuse += diffuseColor.rgb * uSunColor * uLeafSubsurface * pow(backlit, 1.6);
+}`);
+    leafMat2.userData.shader = sh;
+  };
+  return leafMat2;
+}
+
+// src/leaves.js
+import * as THREE4 from "three";
+var clamp3 = THREE4.MathUtils.clamp;
+function buildLeafGeometry(S) {
+  const Bl = S.foliage.blade;
+  const L = Bl.length, outline = Bl.outline || "ovate";
+  const LSEG = outline === "lobed" ? 14 : 8, WSEG = 5;
+  const maxHW = L * Bl.widthRatio;
+  const keel = Bl.keel ?? 0.34, recurve = Bl.recurve ?? 0.38;
+  const droop = Bl.droop ?? 0.16, lift = Bl.lift ?? 0.03;
+  const nLobes = Bl.lobes ?? 4;
+  const halfWidth = (u) => {
+    if (outline === "lobed") {
+      const env = Math.pow(Math.sin(Math.PI * Math.pow(u, 0.9)), 0.55);
+      const sinu = 0.68 + 0.32 * Math.pow(Math.abs(Math.sin(Math.PI * u * nLobes)), 0.8);
+      return maxHW * env * sinu;
+    }
+    if (outline === "narrow")
+      return maxHW * Math.pow(Math.sin(Math.PI * u), 0.45);
+    if (outline === "needle")
+      return maxHW * (1 - u * 0.85);
+    return maxHW * Math.pow(Math.sin(Math.PI * Math.pow(u, 0.78)), 0.72);
+  };
+  const pos = [], uv = [], idx = [];
+  for (let iu = 0; iu <= LSEG; iu++) {
+    const u = iu / LSEG;
+    const hw = halfWidth(u);
+    for (let iv = 0; iv <= WSEG; iv++) {
+      const v01 = iv / WSEG;
+      const v = v01 * 2 - 1;
+      const av = Math.abs(v);
+      const x = u * L;
+      const z = v * hw;
+      let y = 0;
+      y += av * hw * keel;
+      y -= THREE4.MathUtils.smoothstep(av, 0.55, 1) * hw * recurve;
+      y -= u * u * L * droop;
+      y += (1 - u) * (1 - u) * L * lift;
+      pos.push(x, y, z);
+      uv.push(u, v01);
+    }
+  }
+  for (let iu = 0; iu < LSEG; iu++) for (let iv = 0; iv < WSEG; iv++) {
+    const a = iu * (WSEG + 1) + iv, b = a + WSEG + 1;
+    idx.push(a, b, a + 1, b, b + 1, a + 1);
+  }
+  const g = new THREE4.BufferGeometry();
+  g.setAttribute("position", new THREE4.Float32BufferAttribute(pos, 3));
+  g.setAttribute("uv", new THREE4.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+function gradeLeafColors(S, mesh, grade, baseOut, adjust = null) {
+  const P = S.foliage.palette;
+  const n = mesh.count;
+  const col = new THREE4.Color();
+  for (let i = 0; i < n; i++) {
+    const g = i * 8;
+    const sun = grade[g];
+    let h = P.h + rrOf(grade[g + 1], -P.hJitter, P.hJitter) - sun * P.sunHue;
+    let s = rrOf(grade[g + 2], P.s[0], P.s[1]);
+    let l = P.lBase + sun * P.lSun + rrOf(grade[g + 3], -P.lJitter, P.lJitter);
+    if (grade[g + 4] < P.senescent.rate) {
+      h = rrOf(grade[g + 5], P.senescent.h[0], P.senescent.h[1]);
+      s = rrOf(grade[g + 6], P.senescent.s[0], P.senescent.s[1]);
+      l = rrOf(grade[g + 7], P.senescent.l[0], P.senescent.l[1]);
+    }
+    if (adjust) {
+      h += adjust.hueShift || 0;
+      s = clamp3(s * (adjust.satMul ?? 1), 0, 1);
+      l = clamp3(l * (adjust.lightMul ?? 1), 0, 1);
+    }
+    col.setHSL(h, s, l, THREE4.SRGBColorSpace);
+    mesh.setColorAt(i, col);
+    baseOut[i * 3] = col.r;
+    baseOut[i * 3 + 1] = col.g;
+    baseOut[i * 3 + 2] = col.b;
+  }
+  if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+}
+function buildTuftGeometry(S) {
+  const Bl = S.foliage.blade, T = S.foliage.tuft || {};
+  const L = Bl.length;
+  const needles = T.needles ?? 28;
+  const spread = T.spread ?? 1.15;
+  const halfW = Math.max(12e-4, L * Bl.widthRatio * 0.1);
+  const GOLD = Math.PI * (3 - Math.sqrt(5));
+  const pos = [], uv = [], idx = [];
+  for (let i = 0; i < needles; i++) {
+    const az = i * GOLD + ihash01(i * 7 + 1) * 0.7;
+    const pol = spread * (0.28 + 0.72 * Math.sqrt(ihash01(i * 7 + 2)));
+    const len = L * (0.7 + 0.6 * ihash01(i * 7 + 3));
+    const dir = new THREE4.Vector3(Math.sin(pol) * Math.cos(az), Math.cos(pol), Math.sin(pol) * Math.sin(az));
+    const tipY = -len * 0.1 * ihash01(i * 7 + 4);
+    const sx = -Math.sin(az) * halfW, sz = Math.cos(az) * halfW;
+    const bx = dir.x * len * 0.05, by = dir.y * len * 0.05, bz = dir.z * len * 0.05;
+    const b = pos.length / 3;
+    pos.push(bx - sx, by, bz - sz);
+    pos.push(bx + sx, by, bz + sz);
+    pos.push(dir.x * len, dir.y * len + tipY, dir.z * len);
+    uv.push(0.05, 0.2, 0.05, 0.8, 1, 0.5);
+    idx.push(b, b + 1, b + 2);
+  }
+  const g = new THREE4.BufferGeometry();
+  g.setAttribute("position", new THREE4.Float32BufferAttribute(pos, 3));
+  g.setAttribute("uv", new THREE4.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+function buildLeaves(S, anchors, material, leafCap = Infinity) {
+  const P = S.foliage.palette;
+  const N = Math.min(S.leafCount, leafCap);
+  const leafGeo = S.foliage.system === "tufts" ? buildTuftGeometry(S) : buildLeafGeometry(S);
+  const leafMorph = new Float32Array(N * 4);
+  for (let i = 0; i < N; i++) {
+    leafMorph[i * 4] = ihash01(i * 11 + 1);
+    leafMorph[i * 4 + 1] = ihash01(i * 11 + 2);
+    leafMorph[i * 4 + 2] = ihash01(i * 11 + 3);
+    leafMorph[i * 4 + 3] = ihash01(i * 11 + 4);
+  }
+  leafGeo.setAttribute("aLeafMorph", new THREE4.InstancedBufferAttribute(leafMorph, 4));
+  const leaves2 = new THREE4.InstancedMesh(leafGeo, material, N);
+  leaves2.castShadow = true;
+  leaves2.receiveShadow = true;
+  const leafBranch = new Uint16Array(N);
+  const leafBaseColor = new Float32Array(N * 3);
+  const leafGrade = new Float64Array(N * 8);
+  {
+    const positions = [];
+    const m = new THREE4.Matrix4();
+    const xA = new THREE4.Vector3(), yA = new THREE4.Vector3(), zA = new THREE4.Vector3();
+    const sc = new THREE4.Vector3();
+    for (let i = 0; i < N; i++) {
+      const a = anchors[Math.floor(rand() * anchors.length)];
+      const t = a.t;
+      const p1 = Math.abs(t.y) > 0.92 ? new THREE4.Vector3(1, 0, 0) : new THREE4.Vector3(0, 1, 0);
+      const n1 = p1.clone().addScaledVector(t, -p1.dot(t)).normalize();
+      const b1 = new THREE4.Vector3().crossVectors(t, n1);
+      const ang = rr(0, Math.PI * 2);
+      const radial = n1.clone().multiplyScalar(Math.cos(ang)).addScaledVector(b1, Math.sin(ang));
+      const pos = a.p.clone().addScaledVector(t, rr(-0.02, 0.05)).addScaledVector(radial, rr(6e-3, 0.035));
+      xA.copy(t).multiplyScalar(rr(0.35, 0.8)).addScaledVector(radial, rr(0.5, 1)).normalize();
+      xA.y -= rr(0.05, 0.45);
+      xA.normalize();
+      const up = new THREE4.Vector3(rr(-0.18, 0.18), 1, rr(-0.18, 0.18)).normalize();
+      zA.crossVectors(xA, up);
+      if (zA.lengthSq() < 1e-4) zA.set(1, 0, 0).cross(xA);
+      zA.normalize();
+      yA.crossVectors(zA, xA);
+      const s = rr(S.foliage.scale[0], S.foliage.scale[1]);
+      m.makeBasis(xA, yA, zA);
+      sc.set(s, s, s);
+      m.scale(sc);
+      m.setPosition(pos);
+      leaves2.setMatrixAt(i, m);
+      leafBranch[i] = a.id;
+      positions.push(pos);
+    }
+    const centroid = new THREE4.Vector3();
+    positions.forEach((p) => centroid.add(p));
+    centroid.divideScalar(N);
+    let maxR = 0, minY = 1e9, maxY = -1e9;
+    for (const p of positions) {
+      maxR = Math.max(maxR, Math.hypot(p.x - centroid.x, p.z - centroid.z));
+      minY = Math.min(minY, p.y);
+      maxY = Math.max(maxY, p.y);
+    }
+    for (let i = 0; i < N; i++) {
+      const p = positions[i];
+      const relR = clamp3(Math.hypot(p.x - centroid.x, p.z - centroid.z) / maxR, 0, 1);
+      const relY = clamp3((p.y - minY) / (maxY - minY), 0, 1);
+      const g = i * 8;
+      leafGrade[g] = clamp3(relR * 0.6 + relY * 0.5 + rrOf(rand(), -0.18, 0.18), 0, 1);
+      leafGrade[g + 1] = rand();
+      leafGrade[g + 2] = rand();
+      leafGrade[g + 3] = rand();
+      leafGrade[g + 4] = rand();
+      if (leafGrade[g + 4] < P.senescent.rate) {
+        leafGrade[g + 5] = rand();
+        leafGrade[g + 6] = rand();
+        leafGrade[g + 7] = rand();
+      } else {
+        leafGrade[g + 5] = ihash01(i * 3 + 1);
+        leafGrade[g + 6] = ihash01(i * 3 + 2);
+        leafGrade[g + 7] = ihash01(i * 3 + 3);
+      }
+    }
+    gradeLeafColors(S, leaves2, leafGrade, leafBaseColor);
+  }
+  leaves2.instanceMatrix.needsUpdate = true;
+  if (leaves2.instanceColor) {
+    leaves2.instanceColor.needsUpdate = true;
+    leaves2.instanceColor.setUsage(THREE4.DynamicDrawUsage);
+  }
+  leaves2.computeBoundingSphere();
+  return { leaves: leaves2, leafBranch, leafBaseColor, leafGrade };
+}
+
+// src/spec/banyan.treespec.json
+var banyan_treespec_default = {
+  seed: 1892,
+  leafCount: 6800,
+  quality: "auto",
+  habit: {
+    field: { base: 1.08, amp: 0.92, falloff: 2 },
+    steer: 0.22,
+    outward: 0.05
+  },
+  trunk: {
+    height: 1.15,
+    r0: 0.3,
+    r1: 0.185,
+    lean: 0.09,
+    wobble: 0.1,
+    radiusPow: 0.8,
+    gnarl: 0.13,
+    lobes: { count: 7, base: 0.55, amp: 0.6, sharp: 2.4, span: 0.38, mode: "ground" }
+  },
+  recursion: {
+    maxDepth: 4,
+    minRadius: 55e-4,
+    spacing: { "1": 0.28, "2": 0.18, "3": 0.15 },
+    lenByDepth: { "2": [0.5, 0.95], "3": [0.28, 0.52], "4": [0.14, 0.27] },
+    wig: [0, 0.1, 0.15, 0.2, 0.26],
+    steer: [0, 1, 0.85, 0.8, 0.6],
+    childRadius: [0.52, 0.7],
+    upBias: 0.12,
+    gnarlByDepth: [0.16, 0.12, 0.09, 0.07, 0.05]
+  },
+  propRoots: {
+    count: 6,
+    thick: 2,
+    gnarl: 0.15,
+    feet: 2,
+    minAzimuthSep: [0.6, 0.45, 0.25, 0],
+    eligibility: { minY: 0.7, minRad: 0.55, maxRad: 2.3 },
+    topR: [0.028, 0.04],
+    thickR: [0.125, 0.15],
+    thinR: [0.065, 0.105]
+  },
+  surfaceRoots: {
+    count: 8,
+    gnarl: 0.17,
+    length: [0.4, 0.8],
+    r0: [0.07, 0.11],
+    startHeight: [0.08, 0.14]
+  },
+  foliage: {
+    blade: { length: 0.135, widthRatio: 0.33 },
+    anchor: {
+      step: 0.045,
+      startFrac: 0.18,
+      jitter: [0.75, 1.3],
+      maxTwigRadius: 0.04,
+      tipWeight: 2.2,
+      tipThresh: 0.85,
+      tipBonus: 3
+    },
+    scale: [0.8, 1.25],
+    palette: {
+      h: 0.34,
+      hJitter: 0.015,
+      sunHue: 0.012,
+      s: [0.6, 0.75],
+      lBase: 0.06,
+      lSun: 0.065,
+      lJitter: 0.012,
+      senescent: { rate: 0.02, h: [0.13, 0.2], s: [0.55, 0.7], l: [0.28, 0.36] }
+    }
+  },
+  bark: {
+    crevice: [0.045, 0.036, 0.028],
+    ridge: [0.155, 0.132, 0.106],
+    striaScale: 3.2,
+    mottleScale: 6.5,
+    bump: 0.9
+  }
+};
+
+// src/gallery.js
+var CELL = 420;
+var EXPORT = 1600;
+var CURATED = [1892, 777, 42, 1, 5, 99, 1234, 4242, 31337, 271828, 314159, 999983];
+var renderer = new THREE5.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1);
+renderer.setSize(CELL, CELL);
+renderer.setClearColor(16777215, 1);
+renderer.toneMapping = THREE5.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE5.PCFSoftShadowMap;
+var scene = new THREE5.Scene();
+var camera = new THREE5.PerspectiveCamera(50, 1, 0.1, 100);
+var key = new THREE5.DirectionalLight(16773602, 2.9);
+key.castShadow = true;
+key.shadow.mapSize.set(1024, 1024);
+key.shadow.bias = -3e-4;
+key.shadow.normalBias = 0.05;
+scene.add(key);
+scene.add(key.target);
+var KEY_DIR = new THREE5.Vector3(4.2, 7.5, 3.2).normalize();
+scene.add(new THREE5.HemisphereLight(15791354, 14275528, 0.5));
+var pmrem = new THREE5.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+pmrem.dispose();
+var shadowPlane = new THREE5.Mesh(
+  new THREE5.PlaneGeometry(26, 26).rotateX(-Math.PI / 2),
+  new THREE5.ShadowMaterial({ opacity: 0.12 })
+);
+shadowPlane.receiveShadow = true;
+shadowPlane.renderOrder = 1;
+scene.add(shadowPlane);
+var fadePlane = new THREE5.Mesh(
+  new THREE5.PlaneGeometry(26, 26).rotateX(-Math.PI / 2).translate(0, 15e-4, 0),
+  new THREE5.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    uniforms: { uInner: { value: 2.1 }, uOuter: { value: 4.3 } },
+    vertexShader: `varying vec3 vWp; void main(){ vec4 wp = modelMatrix*vec4(position,1.0); vWp = wp.xyz; gl_Position = projectionMatrix*viewMatrix*wp; }`,
+    fragmentShader: `varying vec3 vWp; uniform float uInner,uOuter; void main(){ float a = smoothstep(uInner,uOuter,length(vWp.xz)); gl_FragColor = vec4(1.0,1.0,1.0,a); }`
+  })
+);
+fadePlane.renderOrder = 2;
+scene.add(fadePlane);
+var leafMat = makeLeafMaterial();
+var wood = null;
+var leaves = null;
+var barkMat = null;
+function fitShadow(box) {
+  const sphere = box.getBoundingSphere(new THREE5.Sphere());
+  const c = sphere.center, r = Math.max(1, sphere.radius);
+  const dist = Math.max(6, r * 2.2);
+  key.position.copy(c).addScaledVector(KEY_DIR, dist);
+  key.target.position.copy(c);
+  key.target.updateMatrixWorld();
+  const cam = key.shadow.camera, m = r * 1.06;
+  cam.left = -m;
+  cam.right = m;
+  cam.top = m;
+  cam.bottom = -m;
+  cam.near = Math.max(0.5, dist - r * 1.2);
+  cam.far = dist + r * 1.2 + Math.max(0, box.max.y) / Math.max(0.2, KEY_DIR.y);
+  cam.updateProjectionMatrix();
+}
+function renderSeed(seed, leafCount, size) {
+  if (renderer.domElement.width !== size) renderer.setSize(size, size);
+  if (wood) {
+    scene.remove(wood);
+    wood.geometry.dispose();
+    wood = null;
+  }
+  if (barkMat) {
+    barkMat.dispose();
+    barkMat = null;
+  }
+  if (leaves) {
+    scene.remove(leaves);
+    leaves.geometry.dispose();
+    leaves = null;
+  }
+  const S = structuredClone(banyan_treespec_default);
+  S.seed = seed;
+  S.leafCount = leafCount;
+  reseed(S.seed);
+  const sk = growSkeleton(S);
+  wood = new THREE5.Mesh(buildWoodGeometry(sk.branches, 26), barkMat = makeBarkMaterial(S));
+  wood.castShadow = wood.receiveShadow = true;
+  scene.add(wood);
+  const built = buildLeaves(S, sk.anchors, leafMat);
+  leaves = built.leaves;
+  scene.add(leaves);
+  wood.geometry.computeBoundingBox();
+  leaves.computeBoundingBox();
+  const box = wood.geometry.boundingBox.clone();
+  if (leaves.count > 0) box.union(leaves.boundingBox);
+  fitShadow(box);
+  const sphere = box.getBoundingSphere(new THREE5.Sphere());
+  const c = sphere.center;
+  const dist = sphere.radius * 2.12;
+  camera.position.set(c.x + dist * 0.52, c.y + dist * 0.3, c.z + dist * 0.82);
+  camera.lookAt(c.x, c.y * 0.95, c.z);
+  camera.updateProjectionMatrix();
+  const sh = leafMat.userData.shader;
+  if (sh) {
+    const sun = key.position.clone().sub(key.target.position).normalize();
+    sh.uniforms.uSunView.value.copy(sun.transformDirection(camera.matrixWorldInverse));
+  }
+  renderer.render(scene, camera);
+  return renderer.domElement;
+}
+var grid = document.getElementById("grid");
+var nInput = document.getElementById("g-n");
+var seedInput = document.getElementById("g-seeds");
+var status = document.getElementById("g-status");
+function parseSeeds() {
+  const txt = seedInput.value.trim();
+  if (txt) {
+    const list = txt.split(/[\s,]+/).map((v) => parseInt(v, 10)).filter((v) => Number.isFinite(v));
+    if (list.length) return list;
+  }
+  const n = Math.max(1, Math.min(64, parseInt(nInput.value, 10) || 12));
+  const out = [...CURATED.slice(0, n)];
+  while (out.length < n) out.push(Math.floor(Math.random() * 1e6));
+  return out;
+}
+function exportPng(seed) {
+  status.textContent = `rendering seed ${seed} at ${EXPORT}px\u2026`;
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    const canvas = renderSeed(seed, banyan_treespec_default.leafCount, EXPORT);
+    canvas.toBlob((blob) => {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `banyan-seed-${seed}.png`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      status.textContent = `saved banyan-seed-${seed}.png`;
+    }, "image/png");
+  }));
+}
+async function buildGrid() {
+  grid.textContent = "";
+  const seeds = parseSeeds();
+  for (const seed of seeds) {
+    const cellCanvas = document.createElement("canvas");
+    cellCanvas.width = cellCanvas.height = CELL;
+    const cell = document.createElement("figure");
+    cell.className = "cell";
+    const cap = document.createElement("figcaption");
+    cap.textContent = `seed ${seed}`;
+    cell.appendChild(cellCanvas);
+    cell.appendChild(cap);
+    cell.title = "click to export PNG";
+    cell.addEventListener("click", () => exportPng(seed));
+    grid.appendChild(cell);
+    status.textContent = `growing seed ${seed}\u2026`;
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const src = renderSeed(seed, banyan_treespec_default.leafCount, CELL);
+    cellCanvas.getContext("2d").drawImage(src, 0, 0);
+  }
+  status.textContent = `${seeds.length} seeds \u2014 click any cell to export a ${EXPORT}px PNG`;
+}
+document.getElementById("g-grow").addEventListener("click", buildGrid);
+window.gallery = { renderSeed, buildGrid, exportPng, CURATED };
+buildGrid();
+</script>
+</body>
+</html>

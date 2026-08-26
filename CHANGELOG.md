@@ -1,5 +1,19 @@
 # Changelog
 
+## [study-1] — 2026-08-26 — the public tree study cut
+
+- Repository reshaped around the current v5 runtime — the engine as it matured
+  in production through 2026-08-05: reproducible standalone build (LF-normalized,
+  hash-stamped), readable source, vendored three.js, gold-seed catalogue with
+  preview images and geometry checksums.
+- The faith-emblem remembrance objects are not present in this public build;
+  the runtime's `capabilities.refusedObjects` records them as refused.
+- The former July-era library build (`src/` modules, ESM bundle, examples) is
+  retired from this repository; the earlier single-file artifacts remain below
+  as the engine's evolution history.
+
+---
+
 All notable changes to the Banyan Engine. Format follows
 [Keep a Changelog](https://keepachangelog.com/); the banyan determinism baseline is
 byte-identical from v0.4.0 onward (the integer-hash re-baseline), and every later change

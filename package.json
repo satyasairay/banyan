@@ -1,18 +1,14 @@
 {
-  "name": "banyan-engine",
-  "version": "1.0.0",
+  "name": "banyan",
   "private": true,
+  "version": "1.0.0",
   "license": "AGPL-3.0-only",
-  "type": "module",
-  "description": "Zero-asset procedural banyan tree engine for three.js. src/ modules bundle back to a single-file artifact.",
+  "description": "Banyan — a procedural banyan tree study for three.js. Source builds to a self-contained runtime with the pinned vendor Three.js.",
   "scripts": {
-    "build": "node build.mjs"
-  },
-  "peerDependencies": {
-    "three": "0.165.0"
+    "build": "node tools/build-v5-standalone.mjs --src ../banyan_v5.source.html --out ../banyan_v5.html",
+    "check": "node tools/build-v5-standalone.mjs --src ../banyan_v5.source.html --out ../banyan_v5.html --check"
   },
   "devDependencies": {
-    "esbuild": "^0.25.0",
-    "three": "0.165.0"
+    "esbuild": "0.28.1"
   }
 }

@@ -1,77 +1,78 @@
 # Banyan
 
-A zero-asset procedural tree engine for three.js.
+A procedural banyan tree study for three.js.
 
-Everything is grown from code: trunk, aerial roots, bark, leaves, blossoms,
-ground, light. No models, no textures, no external files. A tree is a 32-bit
-seed plus a JSON spec, and the same seed grows the same tree on every machine,
-every time. Determinism is the point: a tree you can link to is a tree that
-still exists tomorrow.
+Everything is grown from code: trunk, aerial prop roots, bark, leaves, ground,
+grass, litter, light. No models, no textures, no downloaded assets. A tree is a
+32-bit seed, and the same seed grows the same tree on every machine, every
+time. Determinism is the point: a tree you can link to is a tree that still
+exists tomorrow.
 
-![Banyan, close — every strand of bark and every leaf grown from a seed and a spec](docs/images/hero-banyan-closeup.jpg)
+![Banyan, close — bark and canopy grown from a seed](docs/images/hero-banyan-closeup.jpg)
 
 ## See it
 
-Open `dist/banyan.standalone.html` in a browser. One file, no build, no server —
-the engine is inlined; the only thing it fetches is three.js from its CDN. The
-address bar carries deep links (`?species=&seed=&scene=&leaves=&quality=&view=`),
-so any tree you find is shareable as a URL. (For a fully offline artifact with
-three.js baked in, open `banyan_v5.html` — the archived current stage of the
-evolution.)
-
-## Use it
-
-The 60-second embed is an `<iframe>` around the standalone file. For real
-integration, `dist/banyan.module.js` is an ES module (three.js r165 stays
-external, loaded via a CDN import map). Four runnable examples are in
-[examples/](examples/), simplest first.
-
-## Build from source
-
-```sh
-npm install
-node build.mjs
-```
-
-`src/` holds the readable modules — growth skeleton, mesher, materials, leaves,
-scenes, picking, GLB export. Output is never minified: readability is part of
-the product.
-
-## The evolution
-
-`banyan_v2.html` through `banyan_v5.html` at the root are the engine's actual
-growth history — each a complete single-file artifact from that stage, kept as
-it was. v5 is current, and is what `src/` and `dist/` continue.
-
-## Scenes and the spec
-
-Scenes are data: `scenes/*.scenespec.json` (white studio, golden hour, firefly
-night, ink wash). The tree is data too: a `TreeSpec` is a JSON object
-(`src/spec/banyan.treespec.json` is the shipped one, and
-[docs/REFERENCE.md](docs/REFERENCE.md) documents the format). Change a few
-numbers, regrow the tree. This release ships one species, grown properly: the
-banyan. Others exist in the grove and will ship when they look as good.
+Open `banyan_v5.html` in a browser. One self-contained file — three.js is baked
+in by a reproducible build — so it runs from disk, fully offline. Drag to
+orbit, tap a leaf for botanical details, press "copy tree link" to share the
+exact tree you found. Deep links carry `?seed=&scene=&season=`.
 
 ## Gallery
 
-The caption is a command: paste it onto the standalone's URL and the exact
-same tree grows for you. Same seed, same tree.
+Each caption is a command: put it on the standalone's URL and the same tree
+grows for you.
 
-![Banyan, seed 126, golden hour](docs/images/banyan-126-golden-hour.jpg)
+![Banyan, seed 863](docs/images/banyan-863-golden-hour.jpg)
+`?seed=863&scene=golden-hour`
 
-`?species=banyan&seed=126&scene=golden-hour`
+| | |
+|---|---|
+| ![Banyan, seed 1653](docs/images/banyan-1653-golden-hour.jpg) | ![Banyan, seed 754](docs/images/banyan-754-golden-hour.jpg) |
+| `?seed=1653&scene=golden-hour` | `?seed=754&scene=golden-hour` |
 
-## Provenance
+## Gold seeds
 
-The engine and all shipped scenes are 100% procedural; zero external assets are
-bundled. Full provenance table in [SOURCES.md](SOURCES.md). History in
-[CHANGELOG.md](CHANGELOG.md).
+Not every seed grows a great tree. [gold/](gold/) is the curated catalogue:
+ten seeds selected from thousands of candidates, each with a preview image,
+recorded in [gold/gold-banyan-1.json](gold/gold-banyan-1.json) with geometry
+checksums — so a certified tree can be verified, not just admired. Seed `863`
+("Sheltering") and seed `1653` ("Single Bough") are good places to start.
 
-This engine grew out of building [everbanyan.com](https://www.everbanyan.com),
-a living tree memorial for pets.
+## Reproducible build
 
-## License
+`banyan_v5.source.html` is the readable source: one HTML file, the engine in a
+module script, three.js imported from [vendor/](vendor/) (r165, pinned,
+provenance in `vendor/PROVENANCE.md`). The runtime is built from it:
 
-AGPL-3.0. See [LICENSE](LICENSE). In short: use it, learn from it, build with
-it — and if you ship something built on it, your code must be open too. For a
-commercial license outside those terms, contact the author.
+```sh
+npm install
+npm run build     # writes banyan_v5.html
+npm run check     # rebuilds in memory, compares byte-for-byte
+```
+
+The build LF-normalizes the source, bundles with a pinned esbuild, and stamps
+the source hash into the runtime header — one clean build produces the same
+bytes on Windows and Linux. You do not have to trust the shipped file; check it.
+
+## The evolution
+
+`banyan_v2.html` through `banyan_v4.html` are the engine's growth history —
+complete single-file artifacts from each earlier stage, kept as they were.
+`banyan_v5.html` is the current stage, as it matured in production through
+August 2026.
+
+## What this build does not include
+
+The renderer grew inside [everbanyan.com](https://www.everbanyan.com), a living
+tree memorial for pets. Its remembrance objects for faith traditions are not
+part of this public build — they stay behind the product's own review
+obligation, and the runtime's `capabilities.refusedObjects` says so explicitly
+rather than leaving their absence to guesswork.
+
+## Provenance and license
+
+The engine and every scene are 100% procedural; zero external assets are
+bundled (see [SOURCES.md](SOURCES.md)). three.js is MIT. This repository is
+AGPL-3.0 — use it, learn from it, build with it; if you ship something built on
+it, your code must be open too. For a commercial license outside those terms,
+contact the author. See [LICENSE](LICENSE).
