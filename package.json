@@ -1,0 +1,17 @@
+{
+  "name": "banyan-engine",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Zero-asset procedural banyan tree engine for three.js. src/ modules bundle back to a single-file artifact.",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "peerDependencies": {
+    "three": "0.165.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "three": "0.165.0"
+  }
+}

@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Banyan · 01 · minimal embed</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #fff; }
+  iframe { display: block; width: 100%; height: 100vh; border: 0; }
+</style>
+</head>
+<body>
+<!--
+  The 60-second embed. The engine is one self-contained file: point an <iframe> at
+  dist/banyan.standalone.html and (optionally) deep-link the exact tree you want with
+  URL params. Nothing else is required — this page opens straight from disk.
+
+    ?species=  banyan | dead-winter-oak | english-oak | cherry-blossom | baobab | black-pine | weeping-willow
+    ?seed=     any 32-bit integer (the tree's address)
+    ?scene=    white-studio | golden-hour | firefly-night | ink-wash
+    ?leaves=   optional leaf-instance count
+    ?quality=  auto | high | mobile
+    ?view=     az,el,dist  (optional camera)
+
+  Copy this one tag onto any site to embed a specific tree:
+-->
+<iframe
+  src="../../dist/banyan.standalone.html?species=cherry-blossom&seed=1892&scene=firefly-night"
+  title="Banyan — a procedural tree engine"
+  allow="fullscreen"></iframe>
+</body>
+</html>

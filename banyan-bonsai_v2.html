@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Procedural Banyan Bonsai — three.js</title>
+<style>
+  html, body { margin:0; padding:0; background:#ffffff; }
+  body { display:grid; place-items:center; min-height:100vh; }
+  #stage { position:relative; width:1024px; height:1024px; }
+  #stage canvas { display:block; }
+  #hud {
+    position:absolute; top:14px; left:14px; z-index:2;
+    font:12px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color:#3a3a3a; background:rgba(255,255,255,0.85);
+    border:1px solid #e8e8e5; border-radius:6px;
+    padding:9px 12px; pointer-events:none; white-space:pre;
+  }
+  #hud .dim { color:#a2a29e; }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+}}
+</script>
+</head>
+<body>
+<div id="stage"><div id="hud"><span class="dim">click a leaf&hellip;</span></div></div>
+<script type="module">
+// SEED=1892, TOTAL_LEAVES=6800 — fully procedural banyan bonsai (deterministic across reloads)
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+
+/* ============================================================
+   Deterministic RNG + value noise
+   ============================================================ */
+const SEED = 1892;
+const LEAF_COUNT = 6800;
+
+function mulberry32(a){ return function(){ a|=0; a=(a+0x6D2B79F5)|0; let t=Math.imul(a^(a>>>15),1|a); t=(t+Math.imul(t^(t>>>7),61|t))^t; return ((t^(t>>>14))>>>0)/4294967296; }; }
+const rng = mulberry32(SEED);
+const rr = (a,b)=> a+(b-a)*rng();
+const clamp = THREE.MathUtils.clamp, lerp = THREE.MathUtils.lerp;
+
+function hashN(x,y,z){ const s=Math.sin(x*127.1+y*311.7+z*74.7)*43758.5453123; return s-Math.floor(s); }
+function vnoise(x,y,z){
+  const xi=Math.floor(x), yi=Math.floor(y), zi=Math.floor(z);
+  const xf=x-xi, yf=y-yi, zf=z-zi;
+  const sx=xf*xf*(3-2*xf), sy=yf*yf*(3-2*yf), sz=zf*zf*(3-2*zf);
+  const n000=hashN(xi,yi,zi),     n100=hashN(xi+1,yi,zi),
+        n010=hashN(xi,yi+1,zi),   n110=hashN(xi+1,yi+1,zi),
+        n001=hashN(xi,yi,zi+1),   n101=hashN(xi+1,yi,zi+1),
+        n011=hashN(xi,yi+1,zi+1), n111=hashN(xi+1,yi+1,zi+1);
+  return lerp(lerp(lerp(n000,n100,sx), lerp(n010,n110,sx), sy),
+              lerp(lerp(n001,n101,sx), lerp(n011,n111,sx), sy), sz);
+}
+function fbm(x,y,z,oct){
+  let a=0.5, s=0, f=1;
+  for(let i=0;i<oct;i++){ s += a*vnoise(x*f,y*f,z*f); f*=2.03; a*=0.5; }
+  return s / (1 - Math.pow(0.5,oct));
+}
+
+/* ============================================================
+   Renderer / scene / camera / lights
+   ============================================================ */
+const stage = document.getElementById('stage');
+const hud = document.getElementById('hud');
+
+const renderer = new THREE.WebGLRenderer({ antialias:true, preserveDrawingBuffer:true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.setSize(1024, 1024);
+renderer.setClearColor(0xffffff, 1);            // clear is not tone-mapped → pure #FFFFFF
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+stage.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+
+const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 100);
+camera.position.set(3.05, 2.00, 4.95);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 0.88, 0);
+controls.enableDamping = true;
+controls.dampingFactor = 0.06;
+controls.minDistance = 1.6;
+controls.maxDistance = 28;
+controls.maxPolarAngle = Math.PI * 0.55;
+controls.update();
+
+const key = new THREE.DirectionalLight(0xfff1e2, 2.9);
+key.position.set(4.2, 7.5, 3.2);
+key.castShadow = true;
+key.shadow.mapSize.set(1024, 1024);
+key.shadow.camera.left = -3.6; key.shadow.camera.right = 3.6;
+key.shadow.camera.top = 3.6;   key.shadow.camera.bottom = -3.6;
+key.shadow.camera.near = 3;    key.shadow.camera.far = 18;
+key.shadow.bias = -0.0003;
+key.shadow.normalBias = 0.05;
+scene.add(key);
+
+const hemi = new THREE.HemisphereLight(0xf0f4fa, 0xd9d3c8, 0.5);
+scene.add(hemi);
+
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+pmrem.dispose();
+
+/* Ground: shadow-catcher only (background shows through → seamless white),
+   plus a white radial overlay that fades the shadow into the page. */
+const shadowPlane = new THREE.Mesh(
+  new THREE.PlaneGeometry(26, 26).rotateX(-Math.PI/2),
+  new THREE.ShadowMaterial({ opacity: 0.12 })
+);
+shadowPlane.receiveShadow = true;
+shadowPlane.renderOrder = 1;
+scene.add(shadowPlane);
+
+const fadePlane = new THREE.Mesh(
+  new THREE.PlaneGeometry(26, 26).rotateX(-Math.PI/2).translate(0, 0.0015, 0),
+  new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false,
+    uniforms: { uInner:{value:2.1}, uOuter:{value:4.3} },
+    vertexShader: `varying vec3 vWp; void main(){ vec4 wp = modelMatrix*vec4(position,1.0); vWp = wp.xyz; gl_Position = projectionMatrix*viewMatrix*wp; }`,
+    fragmentShader:`varying vec3 vWp; uniform float uInner,uOuter; void main(){ float a = smoothstep(uInner,uOuter,length(vWp.xz)); gl_FragColor = vec4(1.0,1.0,1.0,a); }`
+  })
+);
+fadePlane.renderOrder = 2;
+scene.add(fadePlane);
+
+/* ============================================================
+   Skeleton — recursive banyan growth
+   ============================================================
+   branch = { id, parent, depth, kind, pts[], radii[], gnarl, lobes|null }
+*/
+const branches = [];
+const anchors = [];          // weighted leaf anchor slots {p, t, id}
+const MAXDEPTH = 4;
+
+const domeY = r => 1.08 + 0.92 * Math.exp(-(r*r)/2.0);   // umbrella canopy target surface
+
+function registerBranch(br){ br.id = branches.length; branches.push(br); return br.id; }
+
+function arcTable(pts){ const c=[0]; for(let i=1;i<pts.length;i++) c.push(c[i-1]+pts[i].distanceTo(pts[i-1])); return c; }
+
+function addLeafAnchors(br){
+  const cum = arcTable(br.pts), total = cum[cum.length-1];
+  if (total < 0.04) return;
+  const step = 0.045;
+  for(let s = total*0.18; s < total; s += step*rr(0.75,1.3)){
+    // locate segment
+    let i=1; while(i<cum.length-1 && cum[i]<s) i++;
+    const f = (s-cum[i-1])/Math.max(1e-6, cum[i]-cum[i-1]);
+    const p = br.pts[i-1].clone().lerp(br.pts[i], f);
+    const r = lerp(br.radii[i-1], br.radii[i], f);
+    if (r > 0.04) continue;
+    const t = br.pts[i].clone().sub(br.pts[i-1]).normalize();
+    const tt = s/total;
+    const w = 1 + Math.round(2.2*tt*tt) + (tt>0.85 ? 3 : 0);
+    for(let k=0;k<w;k++) anchors.push({ p, t, id: br.id });
+  }
+}
+
+function growBranch(o){
+  // o: {start, dir, len, r0, r1, depth, parent, wig, steer, kind, gnarl, lobes}
+  const steps = clamp(Math.round(o.len/0.11), 4, 16);
+  const ds = o.len/steps;
+  const pts = [o.start.clone()];
+  const dir = o.dir.clone().normalize();
+  const seed = branches.length*3.77 + 11.3;
+  for(let i=1;i<=steps;i++){
+    const p = pts[i-1];
+    const nx = fbm(p.x*1.7+seed, p.y*1.7,     p.z*1.7,      3)-0.5;
+    const ny = fbm(p.x*1.7+9.1,  p.y*1.7+seed, p.z*1.7,     3)-0.5;
+    const nz = fbm(p.x*1.7,      p.y*1.7+4.7, p.z*1.7+seed, 3)-0.5;
+    dir.addScaledVector(new THREE.Vector3(nx,ny,nz), o.wig*2.2);
+    if(o.steer > 0){
+      const r = Math.hypot(p.x, p.z);
+      dir.y += clamp(domeY(r) + (o.domeOff||0) - p.y, -0.5, 0.5) * 0.22 * o.steer;
+      if (r > 0.05) dir.addScaledVector(new THREE.Vector3(p.x/r, 0, p.z/r), 0.05*o.steer);
+    }
+    dir.normalize();
+    pts.push(p.clone().addScaledVector(dir, ds));
+  }
+  const radii = pts.map((_,i)=> lerp(o.r0, o.r1, Math.pow(i/steps, 0.85)));
+  // pointed tip
+  pts.push(pts[steps].clone().addScaledVector(dir, Math.max(0.015, o.r1*1.5)));
+  radii.push(0.0008);
+
+  const br = { parent:o.parent, depth:o.depth, kind:o.kind||'branch', pts, radii,
+               gnarl:o.gnarl ?? [0.16,0.12,0.09,0.07,0.05][o.depth], lobes:o.lobes||null };
+  const id = registerBranch(br);
+  if (o.depth >= 2) addLeafAnchors(br);
+
+  // -------- children --------
+  if (o.depth >= 1 && o.depth < MAXDEPTH && o.r1 > 0.0055){
+    const cum = arcTable(pts), total = cum[steps];
+    const childDepth = o.depth + 1;
+    const spacing = {1:0.28, 2:0.18, 3:0.15}[o.depth];
+    const lenTab = {2:[0.5,0.95], 3:[0.28,0.52], 4:[0.14,0.27]}[childDepth];
+    let phi = rr(0, Math.PI*2);
+    // side branches
+    for(let s = total*rr(0.28,0.4); s < total*0.92; s += spacing*rr(0.8,1.3)){
+      let i=1; while(i<steps && cum[i]<s) i++;
+      const f = (s-cum[i-1])/Math.max(1e-6, cum[i]-cum[i-1]);
+      const p = pts[i-1].clone().lerp(pts[i], f);
+      const rHere = lerp(radii[i-1], radii[i], f);
+      const T = pts[i].clone().sub(pts[i-1]).normalize();
+      const up = Math.abs(T.y)>0.92 ? new THREE.Vector3(1,0,0) : new THREE.Vector3(0,1,0);
+      const N = up.clone().addScaledVector(T, -up.dot(T)).normalize();
+      const B = new THREE.Vector3().crossVectors(T, N);
+      phi += Math.PI + rr(-0.9, 0.9);
+      const cd = T.clone().multiplyScalar(0.55)
+        .addScaledVector(N, Math.cos(phi)*0.9)
+        .addScaledVector(B, Math.sin(phi)*0.9)
+        .add(new THREE.Vector3(0, 0.12, 0)).normalize();
+      const cr0 = Math.min(rHere*rr(0.52,0.7), rHere*0.85);
+      if (cr0 < 0.0055) continue;
+      growBranch({ start: p.clone().addScaledVector(cd, -rHere*0.4),
+                   dir: cd, len: rr(lenTab[0], lenTab[1]), r0: cr0,
+                   r1: childDepth===MAXDEPTH ? 0.0045 : cr0*rr(0.28,0.4),
+                   depth: childDepth, parent: id, domeOff: (o.domeOff||0)+rr(-0.04,0.04),
+                   wig: [0,0.10,0.15,0.20,0.26][childDepth],
+                   steer: [0,1.0,0.85,0.8,0.6][childDepth] });
+    }
+    // terminal fork
+    const endT = pts[steps].clone().sub(pts[steps-1]).normalize();
+    const perp = new THREE.Vector3(rr(-1,1), rr(-0.3,0.3), rr(-1,1)).cross(endT);
+    if (perp.lengthSq() < 1e-4) perp.set(1,0,0);
+    perp.normalize();
+    const endR = o.r1;
+    for(const sgn of [1,-1]){
+      const a = sgn * rr(0.28, 0.6);
+      const cd = endT.clone().applyAxisAngle(perp, a).normalize();
+      const cr0 = endR*rr(0.7, 0.85);
+      if (cr0 < 0.005) continue;
+      growBranch({ start: pts[steps].clone().addScaledVector(cd, -endR*0.3),
+                   dir: cd, len: rr(lenTab[0], lenTab[1])*rr(0.85,1.1), r0: cr0,
+                   r1: childDepth===MAXDEPTH ? 0.0045 : cr0*rr(0.28,0.4),
+                   depth: childDepth, parent: id, domeOff: (o.domeOff||0)+rr(-0.04,0.04),
+                   wig: [0,0.10,0.15,0.20,0.26][childDepth],
+                   steer: [0,1.0,0.85,0.8,0.6][childDepth] });
+    }
+  }
+  return id;
+}
+
+/* ---------- trunk ---------- */
+const leanAz = rr(0, Math.PI*2);
+const lean = new THREE.Vector3(Math.cos(leanAz), 0, Math.sin(leanAz)).multiplyScalar(0.09);
+const TRUNK_H = 1.15, TRUNK_R0 = 0.30, TRUNK_R1 = 0.185;
+const trunkPts = [], trunkRadii = [];
+{
+  const stepsT = 12;
+  for(let i=0;i<=stepsT;i++){
+    const t = i/stepsT;
+    const wx = (fbm(t*2.5+3.1, 7.7, 1.2, 3)-0.5)*0.10;
+    const wz = (fbm(1.9, t*2.5+5.3, 8.8, 3)-0.5)*0.10;
+    trunkPts.push(new THREE.Vector3(lean.x*t*t + wx*t, -0.03 + (TRUNK_H+0.03)*t, lean.z*t*t + wz*t));
+    trunkRadii.push(lerp(TRUNK_R0, TRUNK_R1, Math.pow(t, 0.8)));
+  }
+}
+const trunk = { parent:-1, depth:0, kind:'trunk', pts:trunkPts, radii:trunkRadii, gnarl:0.13,
+  lobes:{ count:7, phase:rr(0,Math.PI*2), base:0.55, amp:0.6, sharp:2.4, span:0.38, mode:'ground' } };
+const trunkId = registerBranch(trunk);
+
+function trunkPointAt(t){
+  const i = clamp(Math.floor(t*12), 0, 11);
+  const f = t*12 - i;
+  return { p: trunkPts[i].clone().lerp(trunkPts[i+1], f), r: lerp(trunkRadii[i], trunkRadii[i+1], f) };
+}
+
+/* ---------- scaffolds (major limbs) ---------- */
+const GOLD = Math.PI*(3-Math.sqrt(5));
+const scaffoldIds = [];
+{
+  // one low aged limb
+  const az0 = rr(0, Math.PI*2);
+  const at = trunkPointAt(0.6);
+  const d0 = new THREE.Vector3(Math.cos(az0), 0.28, Math.sin(az0)).normalize();
+  scaffoldIds.push(growBranch({ start: at.p.clone().addScaledVector(d0,-at.r*0.35), dir: d0,
+    len: 1.25, r0: at.r*rr(0.42,0.5), r1: 0.028, depth: 1, parent: trunkId, wig: 0.10, steer: 0.8, domeOff: rr(-0.3,-0.15) }));
+  // five upper scaffolds
+  for(let i=0;i<5;i++){
+    const az = az0 + GOLD*(i+1) + rr(-0.35, 0.35);
+    const at2 = trunkPointAt(rr(0.8, 1.0));
+    const elev = rr(0.30, 0.55);
+    const d = new THREE.Vector3(Math.cos(az)*Math.cos(elev), Math.sin(elev), Math.sin(az)*Math.cos(elev)).normalize();
+    scaffoldIds.push(growBranch({ start: at2.p.clone().addScaledVector(d,-at2.r*0.35), dir: d,
+      len: rr(1.25, 1.7), r0: at2.r*rr(0.5,0.62), r1: 0.03, depth: 1, parent: trunkId, wig: 0.10, steer: 1.0, domeOff: rr(-0.12,0.15) }));
+  }
+  // three apex stubs (crown fill)
+  for(let i=0;i<3;i++){
+    const az = rr(0, Math.PI*2);
+    const d = new THREE.Vector3(Math.cos(az)*0.4, 1, Math.sin(az)*0.4).normalize();
+    const at3 = trunkPointAt(1.0);
+    scaffoldIds.push(growBranch({ start: at3.p.clone().addScaledVector(d,-at3.r*0.3), dir: d,
+      len: rr(0.45, 0.7), r0: at3.r*rr(0.42,0.5), r1: 0.025, depth: 1, parent: trunkId, wig: 0.1, steer: 1.0, domeOff: rr(0.0,0.1) }));
+  }
+}
+
+/* ---------- aerial prop roots (banyan signature) ---------- */
+const PROP_COUNT = 6;
+const propRootIds = [];
+{
+  // candidates on scaffolds
+  const cands = [];
+  for(const sid of scaffoldIds){
+    const br = branches[sid];
+    const cum = arcTable(br.pts), total = cum[cum.length-1];
+    for(let tf=0.4; tf<=0.85; tf+=0.15){
+      const s = total*tf;
+      let i=1; while(i<cum.length-1 && cum[i]<s) i++;
+      const f = (s-cum[i-1])/Math.max(1e-6, cum[i]-cum[i-1]);
+      const p = br.pts[i-1].clone().lerp(br.pts[i], f);
+      const r = lerp(br.radii[i-1], br.radii[i], f);
+      const rad = Math.hypot(p.x, p.z);
+      if (p.y > 0.7 && rad > 0.55 && rad < 2.3) cands.push({ p, limbR: r, az: Math.atan2(p.z, p.x), parent: sid });
+    }
+  }
+  // greedy azimuth spread
+  cands.sort(()=> rng()-0.5);
+  const chosen = [];
+  for(const minSep of [0.6, 0.45, 0.25, 0.0]){
+    for(const c of cands){
+      if (chosen.length >= PROP_COUNT) break;
+      if (chosen.includes(c)) continue;
+      let ok = true;
+      for(const q of chosen){
+        let d = Math.abs(c.az - q.az); d = Math.min(d, Math.PI*2-d);
+        if (d < minSep) { ok = false; break; }
+      }
+      if (ok) chosen.push(c);
+    }
+    if (chosen.length >= PROP_COUNT) break;
+  }
+  let thickLeft = 2;
+  for(const c of chosen){
+    const isThick = thickLeft-- > 0;
+    const topR = rr(0.028, 0.04);
+    const botR = isThick ? rr(0.125, 0.15) : rr(0.065, 0.105);
+    const drop = c.p.y;
+    const steps2 = Math.max(8, Math.round(drop/0.12));
+    const pts = [c.p.clone()];
+    const radii = [Math.min(c.limbR*0.9, 0.055)];
+    const seed = branches.length*3.77;
+    const driftAz = rr(0, Math.PI*2), driftAmt = rr(-0.02, 0.12);
+    for(let i=1;i<=steps2;i++){
+      const t = i/steps2;
+      const prev = pts[i-1];
+      const sx = (fbm(prev.x*3+seed, t*4, prev.z*3, 3)-0.5)*0.08;
+      const sz = (fbm(prev.x*3, t*4+seed, prev.z*3+2.2, 3)-0.5)*0.08;
+      pts.push(new THREE.Vector3(
+        c.p.x + Math.cos(driftAz)*driftAmt*t + sx*Math.sin(t*Math.PI),
+        c.p.y * (1-t),
+        c.p.z + Math.sin(driftAz)*driftAmt*t + sz*Math.sin(t*Math.PI)
+      ));
+      radii.push(lerp(topR, botR, THREE.MathUtils.smoothstep(t, 0.45, 0.95)));
+    }
+    pts.push(pts[steps2].clone().setY(-0.05)); radii.push(botR*0.9); // sink into ground
+    const br = { parent:c.parent, depth:1, kind:'prop', pts, radii, gnarl:0.15,
+      lobes:{ count:Math.floor(rr(4,7)), phase:rr(0,Math.PI*2), base:0.5, amp:0.55, sharp:2.2, span:0.16, mode:'end' } };
+    propRootIds.push(registerBranch(br));
+    // small feet
+    const feet = 2;
+    for(let k=0;k<feet;k++){
+      const fz = rr(0, Math.PI*2);
+      const fd = new THREE.Vector3(Math.cos(fz), 0, Math.sin(fz));
+      const fl = rr(0.12, 0.28);
+      const fpts = [], fradii = [];
+      const base = pts[steps2].clone().setY(botR*0.5);
+      const fsteps = 4;
+      for(let i2=0;i2<=fsteps;i2++){
+        const t2 = i2/fsteps;
+        fpts.push(base.clone().addScaledVector(fd, fl*t2).setY(Math.max(0.006, botR*0.5*(1-t2)*(1-t2))));
+        fradii.push(lerp(botR*0.45, 0.004, Math.pow(t2, 0.7)));
+      }
+      registerBranch({ parent: branches.length-1, depth:2, kind:'root', pts:fpts, radii:fradii, gnarl:0.18, lobes:null });
+    }
+  }
+}
+
+/* ---------- surface roots at the base (root flare) ---------- */
+{
+  const N_ROOTS = 8;
+  const az0 = rr(0, Math.PI*2);
+  for(let i=0;i<N_ROOTS;i++){
+    const az = az0 + (i/N_ROOTS)*Math.PI*2 + rr(-0.25, 0.25);
+    const dirH = new THREE.Vector3(Math.cos(az), 0, Math.sin(az));
+    const len = rr(0.4, 0.8);
+    const r0 = rr(0.07, 0.11);
+    const startH = rr(0.08, 0.14);
+    const stepsR = 6;
+    const pts = [], radii = [];
+    const seed = branches.length*3.77;
+    for(let k=0;k<=stepsR;k++){
+      const t = k/stepsR;
+      const meander = (fbm(t*3+seed, seed*0.3, t*2.7, 3)-0.5)*0.22*t;
+      const perp = new THREE.Vector3(-dirH.z, 0, dirH.x);
+      pts.push(new THREE.Vector3(0,0,0)
+        .addScaledVector(dirH, 0.16 + len*t)
+        .addScaledVector(perp, meander)
+        .setY(Math.max(0.006, startH*Math.pow(1-t, 1.7))));
+      radii.push(lerp(r0, 0.005, Math.pow(t, 0.75)));
+    }
+    registerBranch({ parent: trunkId, depth:1, kind:'root', pts, radii, gnarl:0.17, lobes:null });
+  }
+}
+
+/* ============================================================
+   Tube geometry from skeleton (parallel-transport frames)
+   ============================================================ */
+function computeFrames(pts){
+  const n = pts.length, T=[], N=[], B=[];
+  for(let i=0;i<n;i++){
+    const a = pts[Math.max(0,i-1)], b = pts[Math.min(n-1,i+1)];
+    T.push(new THREE.Vector3().subVectors(b,a).normalize());
+  }
+  const up = Math.abs(T[0].y) > 0.92 ? new THREE.Vector3(1,0,0) : new THREE.Vector3(0,1,0);
+  let N0 = up.clone().addScaledVector(T[0], -up.dot(T[0])).normalize();
+  N.push(N0); B.push(new THREE.Vector3().crossVectors(T[0], N0).normalize());
+  const q = new THREE.Quaternion();
+  for(let i=1;i<n;i++){
+    q.setFromUnitVectors(T[i-1], T[i]);
+    const Ni = N[i-1].clone().applyQuaternion(q);
+    Ni.addScaledVector(T[i], -Ni.dot(T[i])).normalize();
+    N.push(Ni);
+    B.push(new THREE.Vector3().crossVectors(T[i], Ni).normalize());
+  }
+  return {T, N, B};
+}
+
+function flareAt(br, i, cum, total){
+  const lob = br.lobes;
+  if (!lob) return 0;
+  if (lob.mode === 'ground') return Math.pow(Math.max(0, 1 - br.pts[i].y/lob.span), 1.6);
+  return Math.pow(Math.max(0, 1 - (total-cum[i])/lob.span), 1.6);
+}
+
+function tubeGeometry(br){
+  const pts = br.pts, radii = br.radii, n = pts.length;
+  const {T, N, B} = computeFrames(pts);
+  const maxR = Math.max(...radii);
+  const segs = maxR>0.16 ? 26 : maxR>0.08 ? 16 : maxR>0.035 ? 11 : maxR>0.016 ? 8 : 6;
+  const cum = arcTable(pts), total = cum[n-1];
+  const posA=[], norA=[], uvA=[], colA=[], idx=[];
+  const rad = new THREE.Vector3(), nrm = new THREE.Vector3();
+  for(let i=0;i<n;i++){
+    const iP = Math.max(0,i-1), iN = Math.min(n-1,i+1);
+    const slope = (radii[iP]-radii[iN]) / Math.max(1e-5, cum[iN]-cum[iP]);
+    const f = flareAt(br, i, cum, total);
+    for(let j=0;j<=segs;j++){
+      const th = j/segs*Math.PI*2;
+      const cs = Math.cos(th), sn = Math.sin(th);
+      rad.set(0,0,0).addScaledVector(N[i],cs).addScaledVector(B[i],sn);
+      let mul = 1, ao = 1;
+      if (br.lobes && f > 1e-4){
+        const w = Math.pow(0.5+0.5*Math.sin(th*br.lobes.count + br.lobes.phase), br.lobes.sharp);
+        mul = 1 + f*(br.lobes.base + br.lobes.amp*w);
+        ao  = 1 - f*(1-w)*0.42;
+      }
+      let g = 1 + br.gnarl * (fbm(cs*1.3 + br.id*0.719, cum[i]*2.4, sn*1.3 - br.id*0.377, 3) - 0.5) * 2.0;
+      g = Math.max(0.62, g);
+      const R = Math.max(0.0006, radii[i]*mul*g);
+      posA.push(pts[i].x + rad.x*R, pts[i].y + rad.y*R, pts[i].z + rad.z*R);
+      nrm.copy(rad).addScaledVector(T[i], slope).normalize();
+      norA.push(nrm.x, nrm.y, nrm.z);
+      uvA.push(j/segs, cum[i]*1.6);
+      // extra AO where branches meet the ground
+      const gAo = ao * (br.kind!=='trunk' ? 1 : 1) * clamp(0.72 + pts[i].y*1.8, 0.72, 1);
+      colA.push(gAo, gAo, gAo);
+    }
+  }
+  for(let i=0;i<n-1;i++) for(let j=0;j<segs;j++){
+    const a = i*(segs+1)+j, b = a+segs+1;
+    idx.push(a, a+1, b,  a+1, b+1, b);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(posA, 3));
+  geo.setAttribute('normal',   new THREE.Float32BufferAttribute(norA, 3));
+  geo.setAttribute('uv',       new THREE.Float32BufferAttribute(uvA, 2));
+  geo.setAttribute('color',    new THREE.Float32BufferAttribute(colA, 3));
+  geo.setIndex(idx);
+  return geo;
+}
+
+const woodGeo = mergeGeometries(branches.map(tubeGeometry));
+
+/* ---------- bark material: procedural striated grey-brown ---------- */
+const barkMat = new THREE.MeshStandardMaterial({
+  color: 0xffffff, roughness: 0.87, metalness: 0.0,
+  vertexColors: true, envMapIntensity: 0.25
+});
+barkMat.onBeforeCompile = (sh)=>{
+  sh.uniforms.uBumpAmt = { value: 0.9 };
+  sh.vertexShader = sh.vertexShader
+    .replace('#include <common>', '#include <common>\nvarying vec3 vWP;\nvarying vec2 vBUv;')
+    .replace('#include <project_vertex>', '#include <project_vertex>\nvWP = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvBUv = uv;');
+  sh.fragmentShader = sh.fragmentShader
+    .replace('#include <common>', `#include <common>
+varying vec3 vWP; varying vec2 vBUv;
+uniform float uBumpAmt;
+float gBarkH;
+float bhash(vec3 p){ p = fract(p*0.3183099 + vec3(0.1,0.2,0.3)); p *= 17.0; return fract(p.x*p.y*p.z*(p.x+p.y+p.z)); }
+float bnoise(vec3 p){ vec3 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
+  return mix(mix(mix(bhash(i),bhash(i+vec3(1,0,0)),f.x), mix(bhash(i+vec3(0,1,0)),bhash(i+vec3(1,1,0)),f.x), f.y),
+             mix(mix(bhash(i+vec3(0,0,1)),bhash(i+vec3(1,0,1)),f.x), mix(bhash(i+vec3(0,1,1)),bhash(i+vec3(1,1,1)),f.x), f.y), f.z); }
+float bfbm(vec3 p){ float a = 0.5, s = 0.0; for(int i=0;i<4;i++){ s += a*bnoise(p); p *= 2.03; a *= 0.5; } return s*1.07; }
+float barkH(){
+  float ang = vBUv.x*6.2831853;
+  vec3 cyl = vec3(cos(ang)*1.55, vBUv.y*1.05, sin(ang)*1.55);
+  float stria = bfbm(cyl*vec3(3.2, 1.0, 3.2));
+  float mott  = bfbm(vWP*6.5);
+  float fine  = bnoise(vWP*52.0);
+  return stria*0.60 + mott*0.28 + fine*0.12;
+}`)
+    .replace('#include <map_fragment>', `#include <map_fragment>
+{
+  gBarkH = barkH();
+  vec3 crev = vec3(0.045, 0.036, 0.028);
+  vec3 ridg = vec3(0.155, 0.132, 0.106);
+  vec3 bark = mix(crev, ridg, smoothstep(0.22, 0.78, gBarkH));
+  bark = mix(bark, bark*vec3(0.9, 1.02, 0.88), smoothstep(0.62, 0.9, bfbm(vWP*2.6))*0.45);
+  diffuseColor.rgb = bark;
+}`)
+    .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
+roughnessFactor = clamp(roughnessFactor - (gBarkH-0.5)*0.18, 0.55, 1.0);`)
+    .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+{
+  vec3 sp = -vViewPosition;
+  vec3 sx = dFdx(sp), sy = dFdy(sp);
+  vec3 r1 = cross(sy, normal), r2 = cross(normal, sx);
+  float det = dot(sx, r1);
+  vec3 grad = sign(det) * (dFdx(gBarkH) * r1 + dFdy(gBarkH) * r2);
+  normal = normalize(abs(det) * normal - uBumpAmt * 0.012 * grad);
+}`);
+  barkMat.userData.shader = sh;
+};
+
+const wood = new THREE.Mesh(woodGeo, barkMat);
+wood.castShadow = true;
+wood.receiveShadow = true;
+scene.add(wood);
+
+/* ============================================================
+   Leaves — instanced, curved ovate blades with midrib + curl
+   ============================================================ */
+function buildLeafGeometry(){
+  const L = 0.135, LSEG = 8, WSEG = 5;
+  const maxHW = L*0.33;
+  const pos=[], uv=[], idx=[];
+  for(let iu=0; iu<=LSEG; iu++){
+    const u = iu/LSEG;
+    const hw = maxHW * Math.pow(Math.sin(Math.PI*Math.pow(u, 0.78)), 0.72);
+    for(let iv=0; iv<=WSEG; iv++){
+      const v01 = iv/WSEG;
+      const v = v01*2 - 1;         // -1..1 across
+      const av = Math.abs(v);
+      const x = u*L;
+      const z = v*hw;
+      let y = 0;
+      y += av*hw*0.34;                                        // midrib keel (V crease)
+      y -= THREE.MathUtils.smoothstep(av, 0.55, 1.0)*hw*0.38; // waxy edge recurve
+      y -= u*u*L*0.16;                                        // tip droop
+      y += (1-u)*(1-u)*L*0.03;                                // slight lift at petiole
+      pos.push(x, y, z);
+      uv.push(u, v01);
+    }
+  }
+  for(let iu=0; iu<LSEG; iu++) for(let iv=0; iv<WSEG; iv++){
+    const a = iu*(WSEG+1)+iv, b = a+WSEG+1;
+    idx.push(a, b, a+1,  b, b+1, a+1);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+
+const leafMat = new THREE.MeshPhysicalMaterial({
+  color: 0xffffff, roughness: 0.46, metalness: 0.0,
+  side: THREE.DoubleSide,
+  clearcoat: 0.25, clearcoatRoughness: 0.32,
+  sheen: 0.15, sheenColor: new THREE.Color(0x8fae66), sheenRoughness: 0.6,
+  envMapIntensity: 0.25
+});
+leafMat.onBeforeCompile = (sh)=>{
+  sh.uniforms.uSunView = { value: new THREE.Vector3(0,1,0) };
+  sh.uniforms.uSunColor = { value: new THREE.Color(0xfff1e2).multiplyScalar(0.16) };
+  sh.vertexShader = sh.vertexShader
+    .replace('#include <common>', '#include <common>\nvarying vec2 vLUv;')
+    .replace('#include <uv_vertex>', '#include <uv_vertex>\nvLUv = uv;');
+  sh.fragmentShader = sh.fragmentShader
+    .replace('#include <common>', `#include <common>
+varying vec2 vLUv;
+uniform vec3 uSunView;
+uniform vec3 uSunColor;`)
+    .replace('#include <color_fragment>', `#include <color_fragment>
+{
+  float u = vLUv.x;
+  float v = vLUv.y - 0.5;
+  float av = abs(v);
+  float mid = (1.0 - smoothstep(0.0, 0.045, av)) * (1.0 - smoothstep(0.72, 0.98, u));
+  float d = abs(fract(u*13.0 - av*1.9) - 0.5);
+  float lat = (1.0 - smoothstep(0.03, 0.09, d));
+  lat *= 1.0 - smoothstep(0.30, 0.46, av);
+  lat *= smoothstep(0.03, 0.12, u) * (1.0 - smoothstep(0.80, 0.97, u));
+  float veins = clamp(mid*0.9 + lat*0.5, 0.0, 1.0);
+  diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb*vec3(1.55,1.45,1.05) + vec3(0.012), veins*0.30);
+  diffuseColor.rgb *= 1.0 - 0.16*smoothstep(0.40, 0.5, av);
+  if (!gl_FrontFacing) diffuseColor.rgb = diffuseColor.rgb*vec3(0.78,0.88,0.70) + vec3(0.045,0.06,0.028);
+}`)
+    .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
+if (!gl_FrontFacing) roughnessFactor = min(1.0, roughnessFactor + 0.32);`)
+    .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
+{
+  float backlit = clamp(-dot(normal, uSunView), 0.0, 1.0);
+  reflectedLight.indirectDiffuse += diffuseColor.rgb * uSunColor * pow(backlit, 1.6);
+}`);
+  leafMat.userData.shader = sh;
+};
+
+const leafGeo = buildLeafGeometry();
+const leaves = new THREE.InstancedMesh(leafGeo, leafMat, LEAF_COUNT);
+leaves.castShadow = true;
+leaves.receiveShadow = true;
+
+const leafBranch = new Uint16Array(LEAF_COUNT);
+const leafBaseColor = new Float32Array(LEAF_COUNT*3);
+{
+  // pass 1: transforms
+  const positions = [];
+  const m = new THREE.Matrix4();
+  const xA = new THREE.Vector3(), yA = new THREE.Vector3(), zA = new THREE.Vector3();
+  const sc = new THREE.Vector3();
+  for(let i=0;i<LEAF_COUNT;i++){
+    const a = anchors[Math.floor(rng()*anchors.length)];
+    const t = a.t;
+    const p1 = Math.abs(t.y)>0.92 ? new THREE.Vector3(1,0,0) : new THREE.Vector3(0,1,0);
+    const n1 = p1.clone().addScaledVector(t, -p1.dot(t)).normalize();
+    const b1 = new THREE.Vector3().crossVectors(t, n1);
+    const ang = rr(0, Math.PI*2);
+    const radial = n1.clone().multiplyScalar(Math.cos(ang)).addScaledVector(b1, Math.sin(ang));
+    const pos = a.p.clone()
+      .addScaledVector(t, rr(-0.02, 0.05))
+      .addScaledVector(radial, rr(0.006, 0.035));
+    // blade direction: outward + drooping
+    xA.copy(t).multiplyScalar(rr(0.35, 0.8)).addScaledVector(radial, rr(0.5, 1.0)).normalize();
+    xA.y -= rr(0.05, 0.45); xA.normalize();
+    const up = new THREE.Vector3(rr(-0.18,0.18), 1, rr(-0.18,0.18)).normalize();
+    zA.crossVectors(xA, up);
+    if (zA.lengthSq() < 1e-4) zA.set(1,0,0).cross(xA);
+    zA.normalize();
+    yA.crossVectors(zA, xA);
+    const s = rr(0.80, 1.25);
+    m.makeBasis(xA, yA, zA);
+    sc.set(s,s,s);
+    m.scale(sc);
+    m.setPosition(pos);
+    leaves.setMatrixAt(i, m);
+    leafBranch[i] = a.id;
+    positions.push(pos);
+  }
+  // pass 2: colors keyed to canopy depth (fake GI) + per-leaf jitter
+  const centroid = new THREE.Vector3();
+  positions.forEach(p=> centroid.add(p));
+  centroid.divideScalar(LEAF_COUNT);
+  let maxR = 0, minY = 1e9, maxY = -1e9;
+  for(const p of positions){
+    maxR = Math.max(maxR, Math.hypot(p.x-centroid.x, p.z-centroid.z));
+    minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
+  }
+  const col = new THREE.Color();
+  for(let i=0;i<LEAF_COUNT;i++){
+    const p = positions[i];
+    const relR = clamp(Math.hypot(p.x-centroid.x, p.z-centroid.z)/maxR, 0, 1);
+    const relY = clamp((p.y-minY)/(maxY-minY), 0, 1);
+    const sun = clamp(relR*0.6 + relY*0.5 + rr(-0.18, 0.18), 0, 1);
+    let h = 0.34 + rr(-0.015, 0.015) - sun*0.012;
+    let s = rr(0.60, 0.75);
+    let l = 0.06 + sun*0.065 + rr(-0.012, 0.012);
+    if (rng() < 0.02){ h = rr(0.13, 0.2); s = rr(0.55, 0.7); l = rr(0.28, 0.36); } // odd senescent leaf
+    col.setHSL(h, s, l, THREE.SRGBColorSpace);
+    leaves.setColorAt(i, col);
+    leafBaseColor[i*3] = col.r; leafBaseColor[i*3+1] = col.g; leafBaseColor[i*3+2] = col.b;
+  }
+}
+leaves.instanceMatrix.needsUpdate = true;
+leaves.instanceColor.needsUpdate = true;
+leaves.instanceColor.setUsage(THREE.DynamicDrawUsage);
+leaves.computeBoundingSphere();
+scene.add(leaves);
+
+console.log(`[banyan] seed=${SEED} leaves=${LEAF_COUNT} branches=${branches.length} anchors=${anchors.length} propRoots=${propRootIds.length}`);
+
+/* ============================================================
+   Picking: hover cursor + click highlight + HUD
+   ============================================================ */
+const raycaster = new THREE.Raycaster();
+const pointerNdc = new THREE.Vector2();
+let pointerDirty = false;
+let hovering = false;
+const pulses = [];   // {id, start}
+const HI = new THREE.Color(2.5, 2.25, 0.75);
+
+function setPointer(e){
+  const rect = renderer.domElement.getBoundingClientRect();
+  pointerNdc.x = ((e.clientX - rect.left)/rect.width)*2 - 1;
+  pointerNdc.y = -((e.clientY - rect.top)/rect.height)*2 + 1;
+}
+function pickLeaf(){
+  raycaster.setFromCamera(pointerNdc, camera);
+  const hits = raycaster.intersectObject(leaves, false);
+  return hits.length ? hits[0] : null;
+}
+
+renderer.domElement.addEventListener('pointermove', (e)=>{ setPointer(e); pointerDirty = true; });
+
+let downX = 0, downY = 0, downT = 0;
+renderer.domElement.addEventListener('pointerdown', (e)=>{ downX = e.clientX; downY = e.clientY; downT = performance.now(); });
+renderer.domElement.addEventListener('pointerup', (e)=>{
+  const moved = Math.hypot(e.clientX-downX, e.clientY-downY);
+  if (moved > 6 || performance.now()-downT > 450) return;
+  setPointer(e);
+  const hit = pickLeaf();
+  if (!hit || hit.instanceId === undefined) return;
+  const id = hit.instanceId;
+  const m = new THREE.Matrix4();
+  leaves.getMatrixAt(id, m);
+  const p = new THREE.Vector3().setFromMatrixPosition(m).applyMatrix4(leaves.matrixWorld);
+  const bid = leafBranch[id];
+  const br = branches[bid];
+  hud.innerHTML =
+    `LEAF   #${id}\n` +
+    `world  (${p.x.toFixed(2)}, ${p.y.toFixed(2)}, ${p.z.toFixed(2)})\n` +
+    `branch B${bid} <span class="dim">· depth ${br.depth} · parent B${br.parent}</span>`;
+  console.log(`[banyan] leaf #${id} | world (${p.x.toFixed(2)}, ${p.y.toFixed(2)}, ${p.z.toFixed(2)}) | branch B${bid}`);
+  // restart pulse if already running
+  const existing = pulses.find(q=> q.id === id);
+  if (existing) existing.start = performance.now();
+  else pulses.push({ id, start: performance.now() });
+});
+
+const tmpCol = new THREE.Color(), baseCol = new THREE.Color();
+function updatePulses(now){
+  if (!pulses.length) return;
+  let write = false;
+  for(let i=pulses.length-1; i>=0; i--){
+    const q = pulses[i];
+    const e = (now - q.start)/600;
+    baseCol.setRGB(leafBaseColor[q.id*3], leafBaseColor[q.id*3+1], leafBaseColor[q.id*3+2]);
+    if (e >= 1){
+      leaves.setColorAt(q.id, baseCol);
+      pulses.splice(i, 1);
+    } else {
+      const s = Math.sin(Math.min(e,1)*Math.PI);
+      tmpCol.copy(baseCol).lerp(HI, s*0.92);
+      leaves.setColorAt(q.id, tmpCol);
+    }
+    write = true;
+  }
+  if (write) leaves.instanceColor.needsUpdate = true;
+}
+
+/* ============================================================
+   Loop
+   ============================================================ */
+const sunDirWorld = key.position.clone().normalize();
+const sunView = new THREE.Vector3();
+
+function animate(){
+  requestAnimationFrame(animate);
+  controls.update();
+  const now = performance.now();
+  updatePulses(now);
+  if (pointerDirty){
+    pointerDirty = false;
+    const hit = pickLeaf();
+    const h = !!hit;
+    if (h !== hovering){
+      hovering = h;
+      renderer.domElement.style.cursor = h ? 'pointer' : '';
+    }
+  }
+  const sh = leafMat.userData.shader;
+  if (sh){
+    sunView.copy(sunDirWorld).transformDirection(camera.matrixWorldInverse);
+    sh.uniforms.uSunView.value.copy(sunView);
+  }
+  renderer.render(scene, camera);
+}
+animate();
+
+// small debug handle for inspection (not used by the scene)
+window.banyan = { camera, controls, setView(az, el, dist){
+  const t = controls.target;
+  camera.position.set(
+    t.x + dist*Math.cos(el)*Math.sin(az),
+    t.y + dist*Math.sin(el),
+    t.z + dist*Math.cos(el)*Math.cos(az));
+  controls.update();
+}};
+</script>
+</body>
+</html>

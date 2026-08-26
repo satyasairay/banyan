@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Banyan — seed gallery</title>
+<style>
+  html, body { margin:0; padding:0; background:#ffffff; color:#3a3a3a;
+    font:13px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  header { display:flex; gap:10px; align-items:center; padding:14px 18px; border-bottom:1px solid #eee; flex-wrap:wrap; }
+  header h1 { font-size:13px; margin:0 12px 0 0; letter-spacing:0.04em; text-transform:uppercase; color:#6a6a66; }
+  header label { color:#8a8a86; }
+  header input { font:inherit; padding:3px 6px; border:1px solid #ddd; border-radius:4px; }
+  #g-n { width:52px; } #g-seeds { width:340px; }
+  header button { font:inherit; padding:4px 12px; border:1px solid #cfcfca; border-radius:5px; background:#fbfbfa; cursor:pointer; }
+  header button:hover { background:#f0f0ee; }
+  #g-status { color:#b0b0ac; }
+  #grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:14px; padding:18px; }
+  .cell { margin:0; cursor:pointer; border:1px solid #eee; border-radius:8px; overflow:hidden; background:#fff; }
+  .cell:hover { border-color:#6b8f4e; }
+  .cell canvas { width:100%; height:auto; display:block; }
+  .cell figcaption { padding:6px 10px; color:#8a8a86; border-top:1px solid #f3f3f1; }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+}}
+</script>
+</head>
+<body>
+<header>
+  <h1>banyan &middot; seed gallery</h1>
+  <label>count <input id="g-n" type="number" min="1" max="64" step="1" value="12"></label>
+  <label>seeds <input id="g-seeds" type="text" placeholder="optional: 1892, 777, 42 — overrides count"></label>
+  <button id="g-grow">grow</button>
+  <span id="g-status"></span>
+</header>
+<div id="grid"></div>
+<script type="module">
+%%BUNDLE%%
+</script>
+</body>
+</html>

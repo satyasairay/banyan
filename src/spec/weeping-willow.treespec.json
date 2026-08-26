@@ -1,0 +1,200 @@
+{
+  "$schema": "treespec/v1",
+  "id": "weeping-willow",
+  "seed": 4242,
+  "leafCount": 9000,
+  "quality": "auto",
+  "habit": {
+    "form": "cascade",
+    "field": {
+      "base": 1.35,
+      "amp": 0.8,
+      "falloff": 2.2
+    },
+    "cascade": {
+      "riseRadius": 0.55,
+      "drop": 2.2,
+      "reach": 2.6
+    },
+    "clampY": 0.8,
+    "steer": 0.3,
+    "outward": 0.12
+  },
+  "trunk": {
+    "height": 1.05,
+    "r0": 0.2,
+    "r1": 0.13,
+    "lean": 0.1,
+    "wobble": 0.11,
+    "radiusPow": 0.8,
+    "gnarl": 0.14,
+    "lobes": {
+      "count": 6,
+      "base": 0.4,
+      "amp": 0.45,
+      "sharp": 2.2,
+      "span": 0.3,
+      "mode": "ground"
+    }
+  },
+  "scaffolds": {
+    "low": 1,
+    "upper": 5,
+    "apex": 2,
+    "elevation": [
+      0.45,
+      0.8
+    ],
+    "lowLen": 1.2,
+    "upperLen": [
+      1.2,
+      1.7
+    ],
+    "apexLen": [
+      0.4,
+      0.6
+    ],
+    "lowElev": 0.4
+  },
+  "recursion": {
+    "maxDepth": 3,
+    "minRadius": 0.005,
+    "spacing": {
+      "1": 0.26,
+      "2": 0.16
+    },
+    "lenByDepth": {
+      "2": [
+        0.5,
+        0.9
+      ],
+      "3": [
+        0.3,
+        0.55
+      ]
+    },
+    "wig": [
+      0,
+      0.11,
+      0.16,
+      0.2
+    ],
+    "steer": [
+      0,
+      1.0,
+      0.9,
+      0.85
+    ],
+    "childRadius": [
+      0.5,
+      0.68
+    ],
+    "upBias": 0.05,
+    "gnarlByDepth": [
+      0.14,
+      0.11,
+      0.09,
+      0.07
+    ]
+  },
+  "strands": {
+    "fromDepth": 3,
+    "perTip": [
+      1,
+      3
+    ],
+    "len": [
+      0.6,
+      1.1
+    ],
+    "r0": 0.007,
+    "sway": 0.1,
+    "gravity": 0.5,
+    "gnarl": 0.05
+  },
+  "propRoots": null,
+  "surfaceRoots": {
+    "count": 6,
+    "gnarl": 0.16,
+    "length": [
+      0.3,
+      0.55
+    ],
+    "r0": [
+      0.055,
+      0.09
+    ],
+    "startHeight": [
+      0.07,
+      0.12
+    ]
+  },
+  "foliage": {
+    "blade": {
+      "length": 0.085,
+      "widthRatio": 0.14,
+      "outline": "narrow",
+      "keel": 0.2,
+      "recurve": 0.1,
+      "droop": 0.05
+    },
+    "anchor": {
+      "step": 0.032,
+      "startFrac": 0.1,
+      "jitter": [
+        0.7,
+        1.2
+      ],
+      "maxTwigRadius": 0.02,
+      "tipWeight": 1.2,
+      "tipThresh": 0.9,
+      "tipBonus": 1
+    },
+    "scale": [
+      0.8,
+      1.2
+    ],
+    "palette": {
+      "h": 0.3,
+      "hJitter": 0.016,
+      "sunHue": 0.014,
+      "s": [
+        0.45,
+        0.65
+      ],
+      "lBase": 0.08,
+      "lSun": 0.07,
+      "lJitter": 0.014,
+      "senescent": {
+        "rate": 0.02,
+        "h": [
+          0.13,
+          0.17
+        ],
+        "s": [
+          0.5,
+          0.65
+        ],
+        "l": [
+          0.26,
+          0.34
+        ]
+      }
+    }
+  },
+  "bark": {
+    "crevice": [
+      0.04,
+      0.035,
+      0.028
+    ],
+    "ridge": [
+      0.14,
+      0.125,
+      0.1
+    ],
+    "striaScale": 4.5,
+    "mottleScale": 5.0,
+    "bump": 1.0
+  }
+}

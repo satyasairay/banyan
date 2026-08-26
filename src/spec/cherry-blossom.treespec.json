@@ -1,0 +1,215 @@
+{
+  "$schema": "treespec/v1",
+  "id": "cherry-blossom",
+  "seed": 1892,
+  "leafCount": 1600,
+  "quality": "auto",
+  "habit": {
+    "form": "dome",
+    "field": {
+      "base": 1.15,
+      "amp": 0.75,
+      "falloff": 2.4
+    },
+    "steer": 0.2,
+    "outward": 0.1
+  },
+  "trunk": {
+    "height": 0.9,
+    "r0": 0.16,
+    "r1": 0.11,
+    "lean": 0.12,
+    "wobble": 0.12,
+    "radiusPow": 0.9,
+    "gnarl": 0.08,
+    "lobes": {
+      "count": 4,
+      "base": 0.25,
+      "amp": 0.3,
+      "sharp": 2.0,
+      "span": 0.22,
+      "mode": "ground"
+    }
+  },
+  "scaffolds": {
+    "low": 0,
+    "upper": 6,
+    "apex": 1,
+    "elevation": [
+      0.55,
+      0.95
+    ],
+    "upperLen": [
+      1.1,
+      1.5
+    ],
+    "apexLen": [
+      0.35,
+      0.55
+    ],
+    "upperAt": [
+      0.85,
+      1.0
+    ]
+  },
+  "recursion": {
+    "maxDepth": 4,
+    "minRadius": 0.0045,
+    "spacing": {
+      "1": 0.26,
+      "2": 0.16,
+      "3": 0.13
+    },
+    "lenByDepth": {
+      "2": [
+        0.45,
+        0.8
+      ],
+      "3": [
+        0.28,
+        0.5
+      ],
+      "4": [
+        0.15,
+        0.28
+      ]
+    },
+    "wig": [
+      0,
+      0.12,
+      0.17,
+      0.22,
+      0.26
+    ],
+    "steer": [
+      0,
+      1.0,
+      0.8,
+      0.7,
+      0.5
+    ],
+    "childRadius": [
+      0.5,
+      0.68
+    ],
+    "upBias": 0.06,
+    "gnarlByDepth": [
+      0.08,
+      0.07,
+      0.06,
+      0.05,
+      0.04
+    ]
+  },
+  "propRoots": null,
+  "surfaceRoots": {
+    "count": 5,
+    "gnarl": 0.1,
+    "length": [
+      0.25,
+      0.45
+    ],
+    "r0": [
+      0.04,
+      0.07
+    ],
+    "startHeight": [
+      0.05,
+      0.09
+    ]
+  },
+  "foliage": {
+    "blade": {
+      "length": 0.1,
+      "widthRatio": 0.4
+    },
+    "anchor": {
+      "step": 0.045,
+      "startFrac": 0.2,
+      "jitter": [
+        0.75,
+        1.3
+      ],
+      "maxTwigRadius": 0.035,
+      "tipWeight": 2.4,
+      "tipThresh": 0.85,
+      "tipBonus": 3
+    },
+    "scale": [
+      0.8,
+      1.2
+    ],
+    "palette": {
+      "h": 0.24,
+      "hJitter": 0.02,
+      "sunHue": 0.012,
+      "s": [
+        0.4,
+        0.58
+      ],
+      "lBase": 0.09,
+      "lSun": 0.06,
+      "lJitter": 0.014,
+      "senescent": {
+        "rate": 0.03,
+        "h": [
+          0.05,
+          0.09
+        ],
+        "s": [
+          0.5,
+          0.65
+        ],
+        "l": [
+          0.25,
+          0.35
+        ]
+      }
+    }
+  },
+  "blossom": {
+    "count": 5200,
+    "clusterSize": 3,
+    "clusterRadius": 0.02,
+    "size": 0.026,
+    "sizeJitter": [
+      0.75,
+      1.35
+    ],
+    "palette": {
+      "h": [
+        0.93,
+        1.0
+      ],
+      "s": [
+        0.28,
+        0.55
+      ],
+      "l": [
+        0.7,
+        0.88
+      ]
+    }
+  },
+  "bark": {
+    "style": "smooth",
+    "crevice": [
+      0.085,
+      0.05,
+      0.045
+    ],
+    "ridge": [
+      0.24,
+      0.145,
+      0.12
+    ],
+    "lenticel": [
+      0.44,
+      0.38,
+      0.34
+    ],
+    "striaScale": 1.2,
+    "mottleScale": 3.2,
+    "bump": 0.35
+  }
+}
