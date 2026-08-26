@@ -12,12 +12,12 @@ still exists tomorrow.
 
 ## See it
 
-Double-click `dist/banyan.standalone.html`. It is a single self-contained file
-and runs straight from disk — no server, no install. The address bar carries
-deep links (`?species=&seed=&scene=&leaves=&quality=&view=`), so any tree you
-find is shareable as a URL.
-
-`dist/forest.standalone.html` grows every species side by side in one scene.
+Open `dist/banyan.standalone.html` in a browser. One file, no build, no server —
+the engine is inlined; the only thing it fetches is three.js from its CDN. The
+address bar carries deep links (`?species=&seed=&scene=&leaves=&quality=&view=`),
+so any tree you find is shareable as a URL. (For a fully offline artifact with
+three.js baked in, open `banyan_v5.html` — the archived current stage of the
+evolution.)
 
 ## Use it
 
@@ -34,30 +34,32 @@ node build.mjs
 ```
 
 `src/` holds the readable modules — growth skeleton, mesher, materials, leaves,
-species, scenes, picking, GLB export. Output is never minified: readability is
-part of the product.
+scenes, picking, GLB export. Output is never minified: readability is part of
+the product.
 
 ## The evolution
 
-`banyan-bonsai_v2.html` through `banyan-bonsai_v5.html` at the root are the
-engine's actual growth history — each a complete single-file artifact from that
-stage, kept as it was. v5 is current, and is what `src/` and `dist/` continue.
+`banyan_v2.html` through `banyan_v5.html` at the root are the engine's actual
+growth history — each a complete single-file artifact from that stage, kept as
+it was. v5 is current, and is what `src/` and `dist/` continue.
 
-## Scenes and species
+## Scenes and the spec
 
 Scenes are data: `scenes/*.scenespec.json` (white studio, golden hour, firefly
-night, ink wash). Species are data too: a `TreeSpec` is a JSON object, and
-`treespec/` documents the format. Change a few numbers, regrow the tree.
+night, ink wash). The tree is data too: a `TreeSpec` is a JSON object
+(`src/spec/banyan.treespec.json` is the shipped one, and
+[docs/REFERENCE.md](docs/REFERENCE.md) documents the format). Change a few
+numbers, regrow the tree. This release ships one species, grown properly: the
+banyan. Others exist in the grove and will ship when they look as good.
 
 ## Gallery
 
-The first two captions are commands: paste them onto the standalone's URL and
-the exact same tree grows for you. Same seed, same tree.
+The caption is a command: paste it onto the standalone's URL and the exact
+same tree grows for you. Same seed, same tree.
 
-| | | |
-|---|---|---|
-| ![Banyan, seed 126, golden hour](docs/images/banyan-126-golden-hour.jpg) | ![Cherry blossom, seed 75, golden hour](docs/images/cherry-blossom-75-golden-hour.jpg) | ![Weeping willow, seed 4242, at dusk](docs/images/weeping-willow-4242-dusk.jpg) |
-| `?species=banyan&seed=126&scene=golden-hour` | `?species=cherry-blossom&seed=75&scene=golden-hour` | weeping willow, seed `4242` |
+![Banyan, seed 126, golden hour](docs/images/banyan-126-golden-hour.jpg)
+
+`?species=banyan&seed=126&scene=golden-hour`
 
 ## Provenance
 

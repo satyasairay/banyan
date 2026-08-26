@@ -205,22 +205,18 @@ Garden** (paper post-process, falling ink leaves, near-zero GPU cost).
 
 ---
 
-## Species catalogue
+## Species
 
-Seven species ship as `TreeSpec` files in `src/spec/`. Each has a curated **hero seed**:
+This release ships one species, grown to standard:
 
 | Species | Hero seed | Character |
 |---|---|---|
 | **Banyan** | `1892` | aerial prop roots, umbrella crown — the reference tree |
-| **Dead Winter Oak** | `4242` | bare five-deep twig lace, strongest silhouette |
-| **English Oak** | `1892` | lobed leaves, broad dome, no props |
-| **Cherry Blossom** | `1892` | vase limbs, smooth mahogany bark, 5,200 blossom clusters |
-| **Baobab** | `777` | bottle trunk, stout high crown, sparse canopy |
-| **Japanese Black Pine** | `1892` | pads habit, 950 instanced 30-needle tufts, plated bark |
-| **Weeping Willow** | `4242` | rise-then-cascade field, 329 pendant strands of narrow leaves |
 
-To grow any of them:
-`?species=<id>&seed=<hero>` on the standalone, or `SPECIES['<id>'].spec` in the library.
+To grow it: `?species=banyan&seed=1892` on the standalone, or
+`SPECIES['banyan'].spec` in the library. A `TreeSpec` is plain JSON — clone it,
+change the numbers, and the same generator grows your variant. More species
+exist in the working grove and will ship when they meet the banyan's bar.
 
 ---
 
