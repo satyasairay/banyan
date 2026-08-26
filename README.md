@@ -8,6 +8,8 @@ seed plus a JSON spec, and the same seed grows the same tree on every machine,
 every time. Determinism is the point: a tree you can link to is a tree that
 still exists tomorrow.
 
+![Banyan, close — every strand of bark and every leaf grown from a seed and a spec](docs/images/hero-banyan-closeup.jpg)
+
 ## See it
 
 Double-click `dist/banyan.standalone.html`. It is a single self-contained file
@@ -46,6 +48,16 @@ stage, kept as it was. v5 is current, and is what `src/` and `dist/` continue.
 Scenes are data: `scenes/*.scenespec.json` (white studio, golden hour, firefly
 night, ink wash). Species are data too: a `TreeSpec` is a JSON object, and
 `treespec/` documents the format. Change a few numbers, regrow the tree.
+
+## Gallery
+
+The first two captions are commands: paste them onto the standalone's URL and
+the exact same tree grows for you. Same seed, same tree.
+
+| | | |
+|---|---|---|
+| ![Banyan, seed 126, golden hour](docs/images/banyan-126-golden-hour.jpg) | ![Cherry blossom, seed 75, golden hour](docs/images/cherry-blossom-75-golden-hour.jpg) | ![Weeping willow, seed 4242, at dusk](docs/images/weeping-willow-4242-dusk.jpg) |
+| `?species=banyan&seed=126&scene=golden-hour` | `?species=cherry-blossom&seed=75&scene=golden-hour` | weeping willow, seed `4242` |
 
 ## Provenance
 
