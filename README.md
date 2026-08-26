@@ -20,15 +20,15 @@ exact tree you found. Deep links carry `?seed=&scene=&season=`.
 ## Gallery
 
 Each caption is a command: put it on the standalone's URL and the same tree
-grows for you.
+grows for you, in the same ground and weather.
 
-![Banyan, seed 863](docs/images/banyan-863-golden-hour.jpg)
-`?seed=863&scene=golden-hour`
+![Banyan 863 "Sheltering" — stone grove, soft mist](docs/images/banyan-863-stone-grove-mist.jpg)
+`?seed=863&ground=stone-grove&weather=mist&scene=golden-hour`
 
 | | |
 |---|---|
-| ![Banyan, seed 1653](docs/images/banyan-1653-golden-hour.jpg) | ![Banyan, seed 754](docs/images/banyan-754-golden-hour.jpg) |
-| `?seed=1653&scene=golden-hour` | `?seed=754&scene=golden-hour` |
+| ![Banyan 1653 "Single Bough" — wild meadow](docs/images/banyan-1653-wild-meadow.jpg) | ![Banyan 153 "Wide Colonnade" — quiet garden](docs/images/banyan-153-quiet-garden.jpg) |
+| `?seed=1653&ground=wild-meadow&scene=golden-hour` | `?seed=153&ground=quiet-garden&scene=golden-hour` |
 
 ## Gold seeds
 
