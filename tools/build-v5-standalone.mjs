@@ -8,25 +8,16 @@
   script with the pinned local Three.js, stamp the GENERATED header with
   the source file's sha256.
 
-  Recreated 2026-07-18 for the standalone EverBanyan Studio repository
-  (the original lived in the former Desktop/trees workspace and was not
-  extracted). Fidelity was proven before first use by building the
-  PRISTINE source and comparing banyan.checksum(), stature() and rendered
-  pixels against the shipped runtime — see
-  review/phases-1-2/<date>/renderer-build/.
+  Builds the single-file runtime banyan_v5.html from banyan_v5.source.html:
+  the vendored three.js module is bundled by esbuild and inlined, and a banner
+  with the source sha256 is stamped on top so a shipped file always names the
+  exact source it came from.
 
-  Usage:  node build-v5-standalone.mjs [--src <file>] [--out <file>] [--check]
+  Usage:  node tools/build-v5-standalone.mjs [--src <file>] [--out <file>] [--check]
           --check builds in memory and compares against the file at --out
           byte-for-byte instead of writing it (exit 1 on drift).
-  Deps:   esbuild, declared by renderer/package.json and installed BESIDE the
-          renderer:  cd renderer && npm install
-          (1-2 Finding 8: the previous instruction borrowed test/node_modules,
-          whose esbuild had only the @esbuild/aix-ppc64 native package present
-          on a win32-x64 machine, so the documented build could not run at all.
-          renderer/package.json now pins esbuild 0.28.1 and npm resolves the
-          native package for whatever platform actually builds.)
-  Vendor: renderer/vendor/three.module.js (Three.js r165, MIT — provenance
-          in renderer/vendor/PROVENANCE.md)
+  Deps:   esbuild, pinned by package.json — npm install at the repository root.
+  Vendor: vendor/three.module.js (Three.js r165, MIT — see SOURCES.md)
 */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -36,14 +27,14 @@ import { createRequire } from 'node:module';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
-/* esbuild lives in renderer/node_modules (the declared home). A repository-
+/* esbuild lives in node_modules at the repository root (the declared home). A repository-
    level or test/ install is accepted as a fallback so an existing checkout
    keeps working, but the error names every root that was tried instead of
    failing with a bare ERR_MODULE_NOT_FOUND. Resolution is explicit rather
    than bare-specifier because the repository root carries a node_modules
    symlink that native Windows cannot traverse. */
 const DEP_ROOTS = [
-  path.resolve(HERE, '..'),            // renderer/            (declared home)
+  path.resolve(HERE, '..'),            // repository root      (declared home)
   path.resolve(HERE, '../..'),         // repository root
   path.resolve(HERE, '../../test'),    // legacy: test/node_modules
 ];
@@ -58,7 +49,7 @@ function loadEsbuild() {
     } catch (err) {
       throw new Error(`esbuild found at ${probe} but failed to load:\n  ${err.message}\n` +
         `Fix the install for THIS platform (${process.platform}-${process.arch}):\n` +
-        `  cd renderer && npm install`);
+        `  npm install`);
     }
   }
   throw new Error('esbuild not installed. Run:\n  cd renderer && npm install\nTried:\n  ' + tried.join('\n  '));
@@ -153,4 +144,4 @@ console.log(`built ${path.relative(process.cwd(), OUT)}`);
 console.log(`  esbuild:       ${esbuild.version} (${process.platform}-${process.arch})`);
 console.log(`  source sha256: ${sha256}`);
 console.log(`  output sha256: ${outSha}`);
-console.log('  remember: update the hash table in renderer/README.md');
+console.log('  remember: update the hash table in README.md');

@@ -1,5 +1,40 @@
 # Changelog
 
+## [study-2] — 2026-09-08 — the frame budget
+
+Nothing here moves the geometry. All ten gold seeds reproduce `checksum()`, the
+combined geometry digest, the anchors digest and the environment checksum on
+this build, on the same hardware that certified the previous one.
+
+- Shading is gated by screen footprint. Leaf venation, bark relief and the soil
+  detail stop being computed once the feature they describe is smaller than the
+  pixels it lands on.
+- The soft shadow filter is a 4x4 hardware compare on a depth texture under
+  WebGL2, in place of 64 point fetches and their RGBA unpack. The penumbra
+  width is unchanged and was measured with the same metric. WebGL1 keeps the
+  old filter, and so does `?hwshadow=0`.
+- Shader compilation no longer arrives as one lump before the first frame. The
+  programs compile in time-budgeted slices, or through `compileAsync` when the
+  browser's cache is cold, and the page draws nothing until they are ready.
+- A drag or an orbit renders at pixel ratio 1 on a dense display and goes back
+  to the preset's cap when the hand comes off (`?dragdpr=0` turns this off).
+- The five bark noise fields are baked once at build time on the GPU and stored
+  with the mesh. The trunk carries about 125,000 vertices; evaluating those
+  fields per vertex cost an iPhone 13 6.2 ms of a 24 ms frame.
+- `?stills=1` widens the shadow footprint and smooths the leaf laminae for
+  offline 4K renders. The live page never pays for it.
+- Measured on a Radeon 740M in Chrome at `balanced`: 21.0 ms of GPU time per
+  frame before, about 12.7 ms after. On an iPhone 13 a drag holds above 30 fps.
+  A first visit on the phone did not get faster.
+
+Runtime `E690706A907356253D45B8FB33AE62A4D79E8ED9FD9D79FF69CC4B9E69745B70`,
+source `8205C282CE158189FDA8EFFF53D884BAF4E0ACC8A74C7DE2F00B060F8176132D`.
+Ported from the EverBanyan product renderer at commit `c65b102` (source
+`93262D959B30DD12D6932BE49F71B2B3E9FA3357FB3B1A25CBA7E7DBFC011944`), the build live on
+everbanyan.com since 2026-09-07; `gold/gold-banyan-1.json` is byte-identical to the
+product's manifest, and the ten-seed witness on this exact file is recorded in the
+product repository at `review/fix/40/2026-09-07/banyan-port-digests/`.
+
 ## [study-1] — 2026-08-26 — the public tree study cut
 
 - Repository reshaped around the current v5 runtime — the engine as it matured

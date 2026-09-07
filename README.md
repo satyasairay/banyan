@@ -12,10 +12,12 @@ exists tomorrow.
 
 ## See it
 
-Open `banyan_v5.html` in a browser. One self-contained file — three.js is baked
-in by a reproducible build — so it runs from disk, fully offline. Drag to
-orbit, tap a leaf for botanical details, press "copy tree link" to share the
-exact tree you found. Deep links carry `?seed=&scene=&season=`.
+[satyasairay.github.io/banyan](https://satyasairay.github.io/banyan/) opens the
+tree. Or open `banyan_v5.html` straight off disk: one self-contained file, with
+three.js baked in by a reproducible build, so it needs no network at all. Drag
+to orbit, tap a leaf for botanical details, press "copy tree link" for a link that
+carries the seed, scene and season (ground and weather are not in the copied link
+yet — add them by hand). Deep links carry `?seed=&scene=&season=`.
 
 ## Gallery
 
@@ -29,6 +31,35 @@ grows for you, in the same ground and weather.
 |---|---|
 | ![Banyan 1653 "Single Bough" — wild meadow](docs/images/banyan-1653-wild-meadow.jpg) | ![Banyan 153 "Wide Colonnade" — quiet garden](docs/images/banyan-153-quiet-garden.jpg) |
 | `?seed=1653&ground=wild-meadow&scene=golden-hour` | `?seed=153&ground=quiet-garden&scene=golden-hour` |
+
+## What it costs to draw
+
+Everything in the frame is shaded rather than painted, so the bill comes due
+every frame. On the reference laptop GPU (a Radeon 740M, Chrome, 1080x896) the
+`balanced` tree spent 21 ms of GPU time per frame in August. It now spends
+about 12.7 ms and stays above 59 fps through orbit and dive. Four fragment
+programs had been doing work below the pixel: leaf venation on leaves fifteen
+pixels tall, bark relief read from a mip nobody could see, a 64-tap shadow
+filter. Most of that is gated by screen footprint now, and the shadow filter is
+a 4x4 hardware compare.
+
+![The same tree with the canopy hidden](docs/images/banyan-863-skeleton.jpg)
+
+The phone told a different story. The trunk carries about 125,000 vertices, and
+a change that moved five noise fields from the pixel to the vertex was a win on
+the laptop and a loss on an iPhone 13, where the trunk covers fewer pixels than
+it has vertices at the pose the page opens on. Those fields are baked once
+at build time now, on the GPU, and stored with the mesh.
+
+![Pixel difference between two builds, amplified](docs/images/banyan-863-heat.jpg)
+
+That picture is how a look change gets checked. Two builds, the same frame,
+every differing pixel lit. The trees in the gold catalogue reproduce their
+geometry checksums on every v5 build, and shading changes are held to what a
+pixel diff, and then a pair of eyes on the live page, cannot tell apart. First
+visit on the phone is the part that did not improve: three paired runs on the
+same iPhone 13 put the new build within two per cent of the old one, and the
+bark bake's one-time cost is where that went.
 
 ## Gold seeds
 
@@ -53,6 +84,11 @@ npm run check     # rebuilds in memory, compares byte-for-byte
 The build LF-normalizes the source, bundles with a pinned esbuild, and stamps
 the source hash into the runtime header — one clean build produces the same
 bytes on Windows and Linux. You do not have to trust the shipped file; check it.
+
+| File | SHA-256 (LF-normalized content) |
+|---|---|
+| `banyan_v5.html` | `E690706A907356253D45B8FB33AE62A4D79E8ED9FD9D79FF69CC4B9E69745B70` |
+| `banyan_v5.source.html` | `8205C282CE158189FDA8EFFF53D884BAF4E0ACC8A74C7DE2F00B060F8176132D` |
 
 ## The evolution
 
