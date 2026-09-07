@@ -173,7 +173,9 @@
   (()=>{
     const box=document.getElementById('boot-status'),msg=document.getElementById('boot-message'),retry=document.getElementById('boot-retry');
     window.__treeBootFail=()=>{if(!box)return;box.hidden=false;msg.textContent='The tree renderer stopped before its first frame. This is a loading or browser error, not a verdict on your hardware. Reload once; if it repeats, check the browser console.';retry.hidden=false};
-    const watchdog=setTimeout(window.__treeBootFail,8000);window.__treeBootReady=()=>clearTimeout(watchdog);
+    let watchdog=setTimeout(window.__treeBootFail,8000);window.__treeBootReady=()=>clearTimeout(watchdog);
+    // fix-40/F3 · while the programs compile off the main thread the 8 s budget does not apply; 60 s does
+    window.__treeBootPending=()=>{clearTimeout(watchdog);watchdog=setTimeout(window.__treeBootFail,60000)};
     addEventListener('error',window.__treeBootFail);addEventListener('unhandledrejection',window.__treeBootFail);
     retry.addEventListener('click',()=>location.reload());
   })();
@@ -336,14 +338,74 @@ function shadowFilterRadius(k){return Math.min(SHADOW_RADIUS_MAX,Math.max(0,+k||
 /* Substitutes the whole PCF_SOFT branch, once, at module load. r <= 1 leaves the
    pristine chunk in place so ?shadow=soft is an honest control and the mobile
    preset is bit-for-bit what it was. */
-function installShadowTent(r){
-  if(r<=1){THREE.ShaderChunk.shadowmap_pars_fragment=SHADOW_CHUNK_PRISTINE;return true}
+/* fix-40/F2 · HARDWARE COMPARE. The tent above is 64 point fetches, each an
+   RGBA unpack and a step(), on every lit fragment of every receiving program —
+   measured at 3.0 ms of a 21 ms desktop frame over the stock 9-tap filter
+   (review/fix/40/2026-09-02/phase0/fps/raw-pairs.*). WebGL2 can do the compare
+   in the texture unit: a depth texture with TEXTURE_COMPARE_MODE and LINEAR
+   filtering returns the bilinear-weighted compare of the 2x2 texels around the
+   sample in ONE fetch. A 4x4 grid of those, tent-weighted (0.4, 0.8, 0.8, 0.4)
+   at 1-texel spacing, has sigma 1.04 texels against the tent's 1.02 — the same
+   penumbra, verified with fix-16's penumbra metric — for 16 fetches and a
+   fraction of the shader text. The depth texture rides beside Three's packed
+   RGBA map (which stays, so nothing else in Three changes) and is bound on the
+   renderer's last texture unit each frame (ebBindShadowDepth). WebGL1 and
+   ?hwshadow=0 keep the tent. `taps`/`step` are compile-time so the still tier
+   can widen the footprint on a bigger map without paying per frame. */
+const EB_HW_SHADOW_UNIFORM='uEbShadowDepth';
+let hwShadowInstalled=false;
+function installShadowTent(r,hw=false,taps=4,step=1.0,pcss=false){
+  hwShadowInstalled=false;
+  if(r<=1&&!hw){THREE.ShaderChunk.shadowmap_pars_fragment=SHADOW_CHUNK_PRISTINE;return true}
   const A='#elif defined( SHADOWMAP_TYPE_PCF_SOFT )',B='#elif defined( SHADOWMAP_TYPE_VSM )';
   const src=SHADOW_CHUNK_PRISTINE,i=src.indexOf(A),j=src.indexOf(B);
   if(i<0||j<0||j<i){
     console.warn('[v5/A3] shadow kernel not patched (Three.js chunk changed shape) — keeping the stock filter');
     THREE.ShaderChunk.shadowmap_pars_fragment=SHADOW_CHUNK_PRISTINE;
     return false;
+  }
+  if(hw){
+    const N=Math.max(2,Math.min(8,taps|0)),c=((N-1)/2).toFixed(2),st=Number(step).toFixed(2);
+    /* still tier · contact hardening. A blocker search on Three's packed map
+       (still bound beside the depth texture) gives the mean occluder depth;
+       the receiver-to-blocker distance in metres times the sun's angular
+       radius (~0.27 deg, tan 0.0047) is the penumbra half-width, which sets
+       the tap spacing per pixel: a canopy 8 m up spreads to ~37 mm, a pebble
+       5 cm up stays sharp. uEbShadowWorld = (frustum width m, depth range m). */
+    const search=pcss?`
+			{
+				float dR = shadowCoord.z; float sB = 0.0; float nB = 0.0;
+				for ( int j = -2; j <= 2; j ++ ) {
+					for ( int i = -2; i <= 2; i ++ ) {
+						float d = unpackRGBAToDepth( texture2D( shadowMap, shadowCoord.xy + vec2( float( i ), float( j ) ) * texelSize * 3.0 ) );
+						if ( d < dR - 0.0004 ) { sB += d; nB += 1.0; }
+					}
+				}
+				if ( nB > 0.5 ) {
+					float dz = ( dR - sB / nB ) * uEbShadowWorld.y;
+					float halfW = dz * 0.0047;
+					float texelM = uEbShadowWorld.x * texelSize.x;
+					ebStep = clamp( halfW / max( texelM, 1e-6 ) / 3.5, 0.35, 4.0 );
+				}
+			}`:'';
+    const kern=`
+			vec2 texelSize = vec2( 1.0 ) / shadowMapSize;
+			float wsum = 0.0;
+			float ebStep = ${st};${search}
+			shadow = 0.0;
+			for ( int sy = 0; sy < ${N}; sy ++ ) {
+				for ( int sx = 0; sx < ${N}; sx ++ ) {
+					vec2 o = ( vec2( float( sx ), float( sy ) ) - ${c} ) * ebStep;
+					float w = ( 1.0 - abs( float( sx ) - ${c} ) / ( ${c} + 1.0 ) ) * ( 1.0 - abs( float( sy ) - ${c} ) / ( ${c} + 1.0 ) );
+					wsum += w;
+					shadow += w * texture( ${EB_HW_SHADOW_UNIFORM}, vec3( shadowCoord.xy + o * texelSize, shadowCoord.z ) );
+				}
+			}
+			shadow = wsum > 0.0 ? shadow / wsum : 1.0;
+		`;
+    THREE.ShaderChunk.shadowmap_pars_fragment='uniform highp sampler2DShadow '+EB_HW_SHADOW_UNIFORM+';\n'+(pcss?'uniform vec2 uEbShadowWorld;\n':'')+src.slice(0,i+A.length)+kern+src.slice(j);
+    hwShadowInstalled=true;
+    return true;
   }
   const tent=`
 			vec2 texelSize = vec2( 1.0 ) / shadowMapSize;
@@ -376,10 +438,53 @@ function applyShadowFilter(renderer,k){
      the CONTROL and is what the mobile preset keeps — ?shadow=soft pins it so
      before and after come from one build. Attempt 2 patched unconditionally, so
      its control tested the candidate against itself. */
-  shadowTentInstalled=installShadowTent(r)&&r>1;
+  // fix-40/F2 · the widened kernel (r > 1) runs on hardware compare wherever WebGL2 allows it
+  const hw=r>1&&renderer.capabilities.isWebGL2&&Q.get('hwshadow')!=='0';
+  /* still tier: the 4096 map with the 8x8 kernel at 2-texel steps ships; the
+     PCSS blocker search is opt-in (?pcss=1) — at the memorial pose the root
+     contact sits in the canopy's umbra and the junction darkening is the
+     shader's own occlusion term, so it was nearly invisible, and its 25 extra
+     fetches per pixel over 8.3 Mpx are real minutes on the VPS's software GL. */
+  const still=hw&&captureStill;
+  shadowTentInstalled=installShadowTent(r,hw,still?8:4,still?2.0:1.0,still&&Q.get('pcss')==='1')&&r>1;
   renderer.shadowMap.type=THREE.PCFSoftShadowMap;
   window.__ebShadowRadiusTexels=r;   // QA: the radius actually in force, readable from a probe
+  window.__ebShadowHw=hwShadowInstalled;   // QA: hardware compare in force
   return r;
+}
+/* fix-40/F2 · the depth texture beside Three's packed map. Three only creates
+   shadow.map when it is null, so creating it here — with a LINEAR, compare-mode
+   depth texture attached — makes every later shadow pass write real depth
+   next to the packed colour it already writes. Called at boot and wherever the
+   old code set shadow.map = null. */
+/* ONE depth texture for the life of the page. It is handed to every lit
+   material as an ordinary uniform through THREE.ShaderLib (below), and
+   Three's uniform layer already knows sampler2DShadow: it binds the texture
+   with its compare mode on a unit of its own choosing, per draw — so there is
+   nothing to patch per program and no unit to share. Three resizes a render
+   target's depth texture itself when the target changes size, so the same
+   object survives a preset change. */
+let ebShadowDepthTex=null;
+const ebShadowWorldU={value:new THREE.Vector2(19.56,79.5)};   // (frustum width m, depth range m) — fitShadows keeps it current
+function ebShadowTarget(light,size){
+  if(!hwShadowInstalled)return;
+  if(light.shadow.map){light.shadow.map.dispose();light.shadow.map=null}
+  if(!ebShadowDepthTex){
+    ebShadowDepthTex=new THREE.DepthTexture(size,size);
+    ebShadowDepthTex.type=THREE.UnsignedIntType;
+    ebShadowDepthTex.minFilter=THREE.LinearFilter;ebShadowDepthTex.magFilter=THREE.LinearFilter;
+    ebShadowDepthTex.compareFunction=THREE.LessEqualCompare;
+    ebShadowDepthTex.name='sun.shadowDepth';
+    // every lit material built after this line receives the sampler; Three clones
+    // ShaderLib uniforms per material but keeps texture references, so one object serves all
+    for(const k of ['standard','physical','lambert','phong','basic','toon']){
+      const lib=THREE.ShaderLib[k];if(lib&&lib.uniforms){lib.uniforms[EB_HW_SHADOW_UNIFORM]={value:ebShadowDepthTex};lib.uniforms.uEbShadowWorld=ebShadowWorldU}
+    }
+  }
+  const rt=new THREE.WebGLRenderTarget(size,size,{minFilter:THREE.NearestFilter,magFilter:THREE.NearestFilter,depthTexture:ebShadowDepthTex});
+  rt.texture.name='sun.shadowMap';
+  light.shadow.map=rt;
+  light.shadow.camera.updateProjectionMatrix();
 }
 
 /* ================= L0 · deterministic randomness ================= */
@@ -2695,13 +2800,19 @@ const BARK_TILE_M=1.0;          // one tile of the atlas is a metre of bark
 let barkAtlasTex=null;
 function bakeBarkAtlas(renderer){
   if(barkAtlasTex)return barkAtlasTex;
+  /* fix-40 · still tier tried 4096 per metre and measured it useless: at the
+     4K frame's ~4 mm pixel the 1024 atlas already exceeds what the pixel can
+     resolve (mip >= 1 is selected), the crops did not change, and the 16x bake
+     cost real minutes on the VPS worker's software rasteriser (775 s per
+     portrait against a 370 s baseline and a +5 min ceiling — review/fix/40/
+     2026-09-03/vps/). 1024 for every path; the still keeps anisotropy 16. */
   const SIZE=1024;
   const rt=new THREE.WebGLRenderTarget(SIZE,SIZE,{
     wrapS:THREE.RepeatWrapping,wrapT:THREE.RepeatWrapping,
     minFilter:THREE.LinearMipmapLinearFilter,magFilter:THREE.LinearFilter,
     generateMipmaps:true,depthBuffer:false,stencilBuffer:false,
     colorSpace:THREE.NoColorSpace});   // this is DATA, not colour
-  rt.texture.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());
+  rt.texture.anisotropy=Math.min(captureStill?16:8,renderer.capabilities.getMaxAnisotropy());
   const quad=new THREE.Mesh(new THREE.PlaneGeometry(2,2),new THREE.RawShaderMaterial({
     vertexShader:`precision highp float;
 attribute vec3 position;attribute vec2 uv;varying vec2 vUv;
@@ -2827,11 +2938,122 @@ void main(){
   return barkAtlasTex;
 }
 
+/* fix-40 phone round · THE BARK FIELDS, BAKED. F1 moved the five colonisation
+   and mottle fields off the bark pixel onto the bark vertex — a win on the
+   reference desktop, where the trunk covers more pixels than it has vertices.
+   On the iPhone 13 the same move read as 6.2 ms of a 24 ms frame
+   (review/fix/40/2026-09-03/phone/BENCH-SPLIT.md): ~95 k vertices × five
+   4-octave fbms every frame on a tile-based GPU, at a pose where the trunk
+   covers fewer pixels than that; the pre-40 runtime's bark cost 1.1 ms there.
+   The fields are pure functions of the world position, so they are evaluated
+   ONCE, at build time, on the GPU, with the SAME GLSL — a WebGL2 transform-
+   feedback pass over the wood's vertices — and handed to the vertex shader as
+   attributes: the values the vertex shader computes today, at zero per-frame
+   cost on every platform, the fragment untouched. WebGL1 keeps the per-frame
+   vertex path; so does ?barkbake=0 (measurement) or any GL failure (logged). */
+const BARK_FIELDS_GLSL=`
+vec4 ebColony(vec3 wp){return vec4(smoothstep(0.35,0.75,bfbm(wp*vec3(0.7,0.4,0.7)+83.0)),
+             smoothstep(0.35,0.85,bfbm(wp*vec3(1.4,0.9,1.4)+31.0)),
+             smoothstep(0.30,0.75,bfbm(wp*vec3(0.8,0.35,0.8)+61.0)),
+             smoothstep(0.6,0.9,bfbm(wp*1.5+31.0)));}
+float ebMott(vec3 wp){return smoothstep(0.52,0.8,bfbm(wp*vec3(2.6,1.4,2.6)+11.0));}`;
+/* The bake program is linked EARLY — right after the GL context exists, before
+   the CPU grows and builds the tree (~0.3–1 s) — and its link status is read
+   only when the bake needs it: with KHR_parallel_shader_compile the driver
+   compiles in the background between the two, so a cold visit does not pay
+   the compile on the main thread (measured 380–387 ms on the reference D3D11
+   host when compiled at bake time; `bark-bake:<wait>+<draw>ms` in the boot
+   marks says what is left). The program is kept for every rebuild. */
+let barkBakeProg=null;
+function ebBarkBakeProgramStart(){
+  if(barkBakeProg||Q.get('barkbake')==='0'||!renderer.capabilities.isWebGL2)return;
+  const gl=renderer.getContext();
+  let vs=null,fs=null,prog=null;
+  try{
+    vs=gl.createShader(gl.VERTEX_SHADER);
+    /* ONE generic field per draw (scale, offset, smoothstep edges as uniforms),
+       five draws: the program holds a single 4-octave fbm instead of five, so
+       its cold compile is a fifth of the size — the five-field version waited
+       184–252 ms on the reference D3D11 host even when linked early. */
+    gl.shaderSource(vs,`#version 300 es
+precision highp float;precision highp int;
+in vec3 position;uniform mat4 modelMatrix;uniform vec3 uScale;uniform float uOff;uniform vec2 uEdge;out float oField;
+${NOISE_GLSL}
+void main(){vec3 wp=(modelMatrix*vec4(position,1.0)).xyz;oField=smoothstep(uEdge.x,uEdge.y,bfbm(wp*uScale+uOff));gl_Position=vec4(0.0);}`);
+    fs=gl.createShader(gl.FRAGMENT_SHADER);
+    gl.shaderSource(fs,'#version 300 es\nprecision highp float;out vec4 o;void main(){o=vec4(0.0);}');
+    gl.compileShader(vs);gl.compileShader(fs);
+    prog=gl.createProgram();gl.attachShader(prog,vs);gl.attachShader(prog,fs);
+    gl.transformFeedbackVaryings(prog,['oField'],gl.SEPARATE_ATTRIBS);
+    gl.linkProgram(prog);   // no status read here — that is the blocking call, taken at bake time
+    barkBakeProg={prog,vs,fs,linkedAt:performance.now()};
+  }catch(e){
+    if(prog)gl.deleteProgram(prog);if(vs)gl.deleteShader(vs);if(fs)gl.deleteShader(fs);
+    barkBakeProg=null;
+  }
+}
+function ebBakeBarkFields(geo,matrixWorld,mat){
+  mat.userData.barkBaked=false;window.__ebBarkBaked=false;
+  if(Q.get('barkbake')==='0'||!renderer.capabilities.isWebGL2)return false;
+  if(!barkBakeProg)ebBarkBakeProgramStart();
+  if(!barkBakeProg)return false;
+  const gl=renderer.getContext(),prog=barkBakeProg.prog;
+  const pos=geo.getAttribute('position'),n=pos.count;
+  // the five fields of ebColony()/ebMott() in BARK_FIELDS_GLSL, as (scale, offset, edges) — keep the two in step
+  const FIELDS=[['aColony0',[0.7,0.4,0.7],83.0,[0.35,0.75]],['aColony1',[1.4,0.9,1.4],31.0,[0.35,0.85]],['aColony2',[0.8,0.35,0.8],61.0,[0.30,0.75]],['aColony3',[1.5,1.5,1.5],31.0,[0.6,0.9]],['aMott',[2.6,1.4,2.6],11.0,[0.52,0.8]]];
+  let tf=null,vbo=null,vao=null;const outs=[];
+  const tBake0=performance.now();let tLinked=0;
+  try{
+    if(!gl.getProgramParameter(prog,gl.LINK_STATUS)){const msg=gl.getProgramInfoLog(prog)||gl.getShaderInfoLog(barkBakeProg.vs)||'link failed';gl.deleteProgram(prog);gl.deleteShader(barkBakeProg.vs);gl.deleteShader(barkBakeProg.fs);barkBakeProg=null;throw new Error(msg)}
+    tLinked=performance.now();
+    vao=gl.createVertexArray();gl.bindVertexArray(vao);
+    vbo=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,vbo);gl.bufferData(gl.ARRAY_BUFFER,pos.array,gl.STATIC_DRAW);
+    const loc=gl.getAttribLocation(prog,'position');gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,3,gl.FLOAT,false,0,0);
+    for(let i=0;i<FIELDS.length;i++){const b=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,b);gl.bufferData(gl.ARRAY_BUFFER,n*4,gl.STATIC_COPY);outs.push(b)}
+    gl.bindBuffer(gl.ARRAY_BUFFER,null);
+    tf=gl.createTransformFeedback();gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK,tf);
+    gl.useProgram(prog);
+    gl.uniformMatrix4fv(gl.getUniformLocation(prog,'modelMatrix'),false,matrixWorld.elements);
+    const uScale=gl.getUniformLocation(prog,'uScale'),uOff=gl.getUniformLocation(prog,'uOff'),uEdge=gl.getUniformLocation(prog,'uEdge');
+    gl.enable(gl.RASTERIZER_DISCARD);
+    for(let i=0;i<FIELDS.length;i++){
+      const [,sc,off,edge]=FIELDS[i];
+      gl.uniform3f(uScale,sc[0],sc[1],sc[2]);gl.uniform1f(uOff,off);gl.uniform2f(uEdge,edge[0],edge[1]);
+      gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER,0,outs[i]);
+      gl.beginTransformFeedback(gl.POINTS);gl.drawArrays(gl.POINTS,0,n);gl.endTransformFeedback();
+    }
+    gl.disable(gl.RASTERIZER_DISCARD);
+    gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER,0,null);
+    gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK,null);
+    gl.bindBuffer(gl.ARRAY_BUFFER,null);gl.bindVertexArray(null);
+    const err=gl.getError();if(err!==gl.NO_ERROR)throw new Error('gl error '+err+' during the bark bake');
+    /* No readback: the transform-feedback buffers ARE the attributes
+       (GLBufferAttribute), so the GPU is never drained to the CPU at boot —
+       the first rig run with a getBufferSubData readback put the cold boot at
+       3 456 ms against the 3 500 ms row and over it on one repeat. The
+       buffers belong to the geometry from here and go with its dispose(). */
+    const owned=outs.splice(0,outs.length);
+    for(let i=0;i<FIELDS.length;i++)geo.setAttribute(FIELDS[i][0],new THREE.GLBufferAttribute(owned[i],gl.FLOAT,1,4,n));
+    geo.addEventListener('dispose',()=>{for(const b of owned)gl.deleteBuffer(b)});
+    mat.userData.barkBaked=true;window.__ebBarkBaked=true;
+    mark('bark-bake:'+(tLinked-tBake0).toFixed(1)+'+'+(performance.now()-tLinked).toFixed(1)+'ms');   // wait for the link · draw (boot marks, read by the bench)
+    return true;
+  }catch(e){
+    console.warn('[v5/fix-40] bark field bake skipped — the per-frame vertex path is kept:',e&&e.message||e);
+    for(const f of FIELDS)geo.deleteAttribute(f[0]);
+    return false;
+  }finally{
+    if(tf)gl.deleteTransformFeedback(tf);if(vao)gl.deleteVertexArray(vao);
+    for(const b of[vbo,...outs])if(b)gl.deleteBuffer(b);   // the program stays for the next rebuild; owned buffers are the geometry's
+    if(renderer.resetState)renderer.resetState();else renderer.state.reset();   // three's GL state cache no longer matches after raw calls
+  }
+}
+
 function makeBarkMaterial(S,windU){
   const Bk=S.bark;
   const mat=new THREE.MeshStandardMaterial({color:0xffffff,roughness:.88,metalness:0,vertexColors:true});
   mat.onBeforeCompile=sh=>{
-    sh.defines={BARKF:String(Bk.family??1),MOB:MOBILE_PATH?'1':'0'};
+    sh.defines={BARKF:String(Bk.family??1),MOB:MOBILE_PATH?'1':'0',SLICE:String(SLICE),BARKBAKE:mat.userData.barkBaked?'1':'0'};
     Object.assign(sh.uniforms,{
       uT:windU.uT,uWind:windU.uWind,uWDir:windU.uWDir,
       uBump:{value:Bk.bump},uStria:{value:Bk.striaScale},uMottle:{value:Bk.mottleScale},
@@ -2845,11 +3067,34 @@ function makeBarkMaterial(S,windU){
     sh.vertexShader=sh.vertexShader
       .replace('#include <common>',`#include <common>
 attribute vec4 aInfo;attribute vec4 aTan;
+#if BARKBAKE==1
+attribute float aColony0;attribute float aColony1;attribute float aColony2;attribute float aColony3;attribute float aMott;
+#endif
 varying vec3 vWP;varying vec2 vBUv;varying vec4 vInfo;varying vec3 vTan;varying vec2 vBarkUv;
+varying vec4 vColony;varying float vMott;
 uniform float uT;uniform float uWind;uniform vec3 uWDir;
-${GUST_GLSL}`)
+${GUST_GLSL}
+${NOISE_GLSL}
+${BARK_FIELDS_GLSL}`)
       .replace('#include <begin_vertex>',`#include <begin_vertex>
 vWP=(modelMatrix*vec4(position,1.0)).xyz;
+/* fix-40/F1 · THE COLONISATION FIELDS ARE PER-VERTEX NOW. Lichen colonies,
+   algal film, damp streaks, moisture and the warm mottle are 0.7-2.6 cycles
+   per metre by construction (fix-16/A13: LOW frequency so they survive to the
+   arrival distance). A limb's rings sit centimetres apart, so evaluating them
+   here and interpolating loses nothing a pixel can show, and it takes five
+   4-octave fbms off every bark pixel: the slice measured that block at 2.45 ms
+   of a 21 ms frame on the reference desktop. Smoothstepped BEFORE
+   interpolation, so the thresholds keep their contrast between vertices.
+   fix-40 phone round: on WebGL2 the same five fields arrive BAKED as vertex
+   attributes (ebBakeBarkFields — the same GLSL run once at build time), so the
+   per-frame vertex stage no longer pays for them; the #else branch is the
+   WebGL1 / ?barkbake=0 path and is the function the bake evaluates. */
+#if BARKBAKE==1
+vColony=vec4(aColony0,aColony1,aColony2,aColony3);vMott=aMott;
+#else
+vColony=ebColony(vWP);vMott=ebMott(vWP);
+#endif
 vTan=mat3(modelMatrix)*aTan.xyz;   // fix-16/A1 · the limb axis, in world space
 // fix-16/A12 · the atlas coordinate: whole tiles AROUND the limb (so uv.x
 // wraps exactly at the seam) and metres ALONG it divided by the tile size.
@@ -2865,6 +3110,7 @@ vBUv=uv;vInfo=aInfo;
     sh.fragmentShader=sh.fragmentShader
       .replace('#include <common>',`#include <common>
 varying vec3 vWP;varying vec2 vBUv;varying vec4 vInfo;varying vec3 vTan;varying vec2 vBarkUv;
+varying vec4 vColony;varying float vMott;   // fix-40/F1 · lichen colony tint, alga, streak mask, moisture; warm mottle
 uniform sampler2D uBarkTex;uniform vec3 uSunV;uniform float uBump;uniform float uStria;uniform float uMottle;
 uniform vec3 uCrev;uniform vec3 uRidge;uniform vec3 uLentic;
 uniform vec3 uSkinMul;uniform float uSkinAmount;uniform float uRain;
@@ -2962,6 +3208,7 @@ float barkH(){
   // wrinkle bands, high-frequency fissure grain, corky lenticel dashes and small
   // sharp pustules. Every field is built in the LIMB'S frame (limbQ), so the
   // structure follows the wood instead of world up.
+#if (SLICE & 1)==0
   vec3 wq=vWP*1.9;
   // the domain warp is a LOW-frequency distortion; four octaves per component
   // bought nothing visible and cost 12 noise samples. One octave, three offsets.
@@ -2974,6 +3221,9 @@ float barkH(){
   // v4.1/F-02: wrinkle bands halved + warped harder — macro shots read them as flat
   // horizontal banding; every fine signal below is band-limited by pixel footprint.
   float band=pow(sin(vBUv.y*34.0+base*13.0)*0.5+0.5,1.6)*bandMask*bbandUv(6.0);
+#else
+  float ropeS=0.5,rope2=0.5,base=0.5,band=0.0;   // fix-40 slice 1: macro fields off
+#endif
   /* fix-16/A12 · ONE TEXTURE FETCH IS NOW THE WHOLE FINE BAND.
 
      What stood here was A1's fissure layer — two band-limited ridged fbms
@@ -3005,7 +3255,11 @@ float barkH(){
      it the atlas's full pore mask at 0.85 mixed nearly half the limb toward
      the neutral lenticel colour and greyed the whole trunk. */
   gLent=poreT*0.30;
+#if (SLICE & 1)==0
   float fibV=(1.0-abs(bnoise(limbQ(vWP*9.0,0.26))*2.0-1.0))*bband(9.0);   // mid-scale fibre bridges rope→grain scales
+#else
+  float fibV=0.5;
+#endif
   /* The world-space rope network is now BACKGROUND, not the surface. It
      gives the limb its macro form; the atlas gives it its bark. Before this
      rebalance the rope still dominated and the fissure could not be seen
@@ -3017,8 +3271,13 @@ float barkH(){
      offset on top of the macro terms put h mostly below 0.18 and the trunk
      came back uniformly crevice-coloured; adding it too weakly left the macro
      rope on top and the fissure invisible. It is a weighted MIX, atlas-led. */
+#if (SLICE & 1)==0
   float macro=0.30+ropeS*0.19*mix(0.35,1.0,bs)+rope2*0.08*bs*bband(7.2)+base*0.11
     +band*0.04*bs+fibV*0.07*bs+bnoise(limbQ(vWP*6.0,2.2))*0.03*bband(13.0);
+#else
+  float macro=0.30+ropeS*0.19*mix(0.35,1.0,bs)+rope2*0.08*bs*bband(7.2)+base*0.11
+    +band*0.04*bs+fibV*0.07*bs+0.015;
+#endif
   h=clamp(macro*0.45+bH*0.78*mix(0.55,1.0,bs)-0.10,0.0,1.0);
   /* gFine is still the part kept OUT of the normal, but for a different
      reason now: the atlas's own relief is prefiltered and safe to
@@ -3071,10 +3330,14 @@ float barkH(){
   // universal close-range relief: soft irregular twig grain + root/prop fibre grain
   float kindW=vInfo.z;
   float twigF=1.0-smoothstep(0.06,0.4,bs);
+#if (SLICE & 2)==0
+  if(dAtt>0.02){   // fix-40/F1 · same footprint branch as the albedo block below
   float striT=bfbm(vec3(vBUv.x*7.0,vWP.y*2.0,vBUv.y*14.0));
   float rootK=step(1.5,kindW)*step(kindW,4.5);
   float fib=1.0-abs(bnoise(vec3(vBUv.x*9.0,vBUv.y*1.6,7.7))*2.0-1.0);
   h+=twigF*(striT-0.5)*0.07*dAtt*bbandUv(2.2)+rootK*fib*0.10*dAtt*bbandUv(1.5)*(1.0-twigF*0.6);
+  }
+#endif
   return h;
 }
 float crackMask(){
@@ -3097,8 +3360,9 @@ float lenticels(){
   bark*=mix(0.68,1.06,smoothstep(0.06,0.85,gH));                    // v4.1/F-02: occlusion floor lifted — no black smear at macro
 #if BARKF==0
   bark*=0.86+0.14*smoothstep(0.06,0.58,gH);                       // crevice occlusion between ropes (tempered)
-  float mott=bfbm(vWP*vec3(2.6,1.4,2.6)+11.0);
-  bark=mix(bark,bark*vec3(1.09,1.04,0.94),smoothstep(0.52,0.8,mott)*0.4);           // warm tan patches (v4.1: tempered)
+#if (SLICE & 4)==0
+  bark=mix(bark,bark*vec3(1.09,1.04,0.94),vMott*0.4);           // warm tan patches (v4.1: tempered) — fix-40/F1: per-vertex field
+#endif
   /* ================= fix-16/A13 · COLONISATION =================
 
      After fissure, the most obvious thing in every photograph on the owner's
@@ -3124,6 +3388,7 @@ float lenticels(){
 
      All three are LOW frequency by construction, so they survive to the
      arrival distance where the fissure band cannot. */
+#if (SLICE & 4)==0
   {
     float lich=gBarkTex.b;
     // aspect: 0 on the sunward face, 1 on the shaded one
@@ -3137,26 +3402,27 @@ float lenticels(){
     float crust=lich*(0.35+0.75*shade)*smoothstep(0.12,0.5,bs);
     crust=clamp(crust,0.0,1.0);
     vec3 lichenC=vec3(0.60,0.62,0.53)*(0.84+0.30*gBarkTex.g);
-    // colonies differ: some grey-white, some distinctly green
-    lichenC=mix(lichenC,lichenC*vec3(0.84,1.02,0.74),
-      smoothstep(0.35,0.75,bfbm(vWP*vec3(0.7,0.4,0.7)+83.0)));
+    // colonies differ: some grey-white, some distinctly green (fix-40/F1: the field is per-vertex, vColony.x)
+    lichenC=mix(lichenC,lichenC*vec3(0.84,1.02,0.74),vColony.x);
     bark=mix(bark,lichenC,crust*0.34);
     bark=mix(bark,lichenC*vec3(0.88,0.94,0.82),crust*crust*0.16);   // denser rim reads greener
 
-    // 2 · algal film — green, damp side and lower trunk, a wash not a patch
-    float alga=smoothstep(0.35,0.85,bfbm(vWP*vec3(1.4,0.9,1.4)+31.0))*(0.30+0.70*shade)*(0.25+0.75*damp);
+    // 2 · algal film — green, damp side and lower trunk, a wash not a patch (vColony.y)
+    float alga=vColony.y*(0.30+0.70*shade)*(0.25+0.75*damp);
     bark=mix(bark,bark*vec3(0.72,0.92,0.66),alga*0.42);
 
-    // 3 · damp streaks — DOWN the limb, from the fissures, keyed to bAlong
-    float streak=pow(0.5+0.5*sin(vBUv.x*37.0+gBarkTex.r*11.0),3.0)
-                *smoothstep(0.30,0.75,bfbm(vWP*vec3(0.8,0.35,0.8)+61.0))*damp;
+    // 3 · damp streaks — DOWN the limb, from the fissures, keyed to bAlong (mask vColony.z)
+    float streak=pow(0.5+0.5*sin(vBUv.x*37.0+gBarkTex.r*11.0),3.0)*vColony.z*damp;
     bark*=1.0-streak*0.26*bs;
   }
-  bark=mix(bark,bark*vec3(0.82,0.9,0.8),smoothstep(0.6,0.9,bfbm(vWP*1.5+31.0))*moist*0.6);
+  bark=mix(bark,bark*vec3(0.82,0.9,0.8),vColony.w*moist*0.6);
+#endif
   bark=mix(bark,uLentic*vec3(1.06,0.98,0.9),gLent*0.55*smoothstep(0.1,0.4,bs));     // pustule caps
   bark*=1.0-gLent*(1.0-gLent)*0.9*smoothstep(0.1,0.4,bs);                           // dark pustule rims
+#if (SLICE & 4)==0
   float scar=smoothstep(0.86,0.95,bnoise(vWP*vec3(3.0,9.0,3.0)+4.0));
   bark*=1.0-scar*0.22;
+#endif
   /* fix-16/A12 · a deep groove is a CUT: it is occluded as well as darker, and
      the ridge shoulder beside it catches the light. The albedo ramp alone is
      too gentle to read as either. */
@@ -3204,6 +3470,12 @@ float lenticels(){
   // twig bark: soft irregular tone patches (no regular ribs) + sparse bud-scale scars
   float dAtt2=bNear;   // fix-16/A1 · footprint, not camera distance (see bband)
   float twigF=1.0-smoothstep(0.06,0.4,bs);
+#if (SLICE & 2)==0
+  /* fix-40/F1 · a real branch: these terms were already multiplied by the
+     footprint factor, which the GPU cannot skip. Below 2 % they moved a 16 %
+     modulation by under 0.3 % — nothing a pixel shows — and at the arrival
+     distance that is the whole trunk. */
+  if(dAtt2>0.02){
   float striC=bfbm(vec3(vBUv.x*7.0,vWP.y*2.0,vBUv.y*14.0));
   bark*=1.0+twigF*dAtt2*(striC-0.5)*0.16;
   bark*=1.0-twigF*smoothstep(0.78,0.95,bnoise(vec3(vBUv.x*4.0,vBUv.y*6.0,3.3)))*0.12; // bud-scale scars
@@ -3211,9 +3483,15 @@ float lenticels(){
   float rootC=step(1.5,kindW)*step(kindW,3.5);
   float fibC=1.0-abs(bnoise(vec3(vBUv.x*9.0,vBUv.y*1.6,7.7))*2.0-1.0);
   bark*=1.0+rootC*(fibC-0.5)*0.16*dAtt2;
+  }
+#endif
   // aerial roots: rusty fibrous tan, vertically streaked
   float aer=step(3.5,kindW)*step(kindW,4.5);
+#if (SLICE & 2)==0
   vec3 aerC=vec3(0.52,0.38,0.26)*(0.72+0.6*bnoise(vec3(vBUv.x*44.0,vWP.y*3.5,vWP.z*2.0)));   // V9: rusty tan that reads in low light
+#else
+  vec3 aerC=vec3(0.52,0.38,0.26);
+#endif
   bark=mix(bark,aerC,aer*0.9);
   bark*=mix(vec3(1.0),vec3(0.62,0.71,0.78),uRain*0.68);
   diffuseColor.rgb=bark*mix(vec3(1.0),uSkinMul,uSkinAmount);
@@ -3234,7 +3512,7 @@ roughnessFactor=mix(clamp(roughnessFactor,0.34,1.0),0.40,uRain*0.72);`)
 #if BARKF==1
   rh+=crackMask()*0.7*vInfo.y;
 #endif
-#if MOB==1
+#if MOB==1 || (SLICE & 8)!=0
   // the derivative normal is four screen-space derivatives and a normalize on
   // every bark pixel; at 0.41 Mpx on a phone that is real money for relief
   // nobody resolves at arm's length through a 1.25 dpr cap. The atlas still
@@ -3263,7 +3541,7 @@ function makeLeafMaterial(S,windU,canopyU){
      visually at all and simply stops MSAA being demanded. */
   if((FX.serr||[0,0])[0]>0&&!MOBILE_PATH)mat.alphaToCoverage=true;   // v4.1/F-01: serrated margins via MSAA coverage, not binary discard
   mat.onBeforeCompile=sh=>{
-    sh.defines={...(sh.defines||{}),MOB:MOBILE_PATH?'1':'0'};
+    sh.defines={...(sh.defines||{}),MOB:MOBILE_PATH?'1':'0',SLICE:String(SLICE)};
     Object.assign(sh.uniforms,{
       uT:windU.uT,uWind:windU.uWind,uWDir:windU.uWDir,
       uCanC:canopyU.uCanC,uSunV:canopyU.uSunV,uSunC:canopyU.uSunC,uEnvI:canopyU.uEnvI,
@@ -3382,7 +3660,7 @@ ${NOISE_GLSL}`)
     float sidev=vv<0.0?0.0:1.0;
     // secondaries: DISCRETE veins leaving the midrib at irregular points, each arcing
     // toward the apex with its own curvature, then looping to run along the margin.
-#if MOB==1
+#if MOB==1 || (SLICE & 32)!=0
     /* fix-16/A10 · THE SIXTEEN-ITERATION LOOP. The phone report named this as
        the other fragment loop in the build, and it runs on every leaf pixel of
        a 2 100-sprig canopy that fills the frame. A banyan leaf's venation is
@@ -3390,9 +3668,20 @@ ${NOISE_GLSL}`)
        so the whole hierarchy is replaced by the midrib alone. */
     float lat=0.0,nearU=1.0;
 #else
-    int NVi=int(uVein.x+0.5);
     float latRelief=0.0;                                           // nearest-vein response
     float nearU=1.0;                                               // u-distance to nearest vein
+    /* fix-40/F1 · THE LOOP ONLY WHERE A VEIN CAN BE SEEN. fpU is the pixel
+       footprint along the blade (1/leaf length in px). Past ~0.05 (a leaf
+       under 20 px long) every secondary is already widened to the footprint
+       and clamped to 35 % strength, so the loop's output is a broad tint, not
+       lines; that tint is kept as its envelope times a constant so the average
+       leaf colour holds, and the hashes stop. The slice measured the loop at
+       1.2 ms of a 21 ms frame at the arrival distance, where no leaf is 20 px. */
+    float latEnv=smoothstep(0.03,0.10,u)*(1.0-smoothstep(0.9,1.0,u))*smoothstep(midW*0.6,midW*1.9,avv)*smoothstep(-0.02,0.12,rimD);
+    float latFar=0.10*latEnv*denseK;
+    float latK=smoothstep(0.03,0.05,fpU);
+    if(latK<1.0){
+    int NVi=int(uVein.x+0.5);
     float su=0.02;                                                 // running vein origin up the midrib
     for(int i=0;i<16;i++){
       if(i>=NVi)break;
@@ -3415,15 +3704,28 @@ ${NOISE_GLSL}`)
                *(0.32+0.68*onSide)*clamp(wv/wvA,0.35,1.0);
       latRelief=max(latRelief,(1.0-smoothstep(wvA*0.4,wvA,d))*env*(0.5+0.55*h2)*denseK);
     }
+    latRelief=mix(latRelief,latFar,latK);nearU=mix(nearU,0.5,latK);
+    }else{latRelief=latFar;nearU=0.5;}
     float lat=clamp(latRelief,0.0,1.0);                            // downstream lateral tone/relief
 #endif
     lVein=clamp(mid+lat*0.72,0.0,1.0);
     lDome=smoothstep(0.02,0.16,nearU)*smoothstep(0.05,0.18,avv)*(1.0-mid)*dAttL2*denseK*0.7; // intercostal lift
     // reticulation: soft cellular net between secondaries — band-limited so it can
     // never resolve into salt-and-pepper (v4.1/F-03)
-    float ret=(bfbm(vec3(u*20.0,v*12.0,vLf*2.7))*0.6+bnoise(vec3(u*44.0,v*25.0,vLf*5.1))*0.4*bl44)*bl20;
-    float tert=smoothstep(0.5,0.85,bfbm(vec3(u*30.0,v*18.0,vLf*4.2)))
+#if (SLICE & 64)==0
+    /* fix-40/F1 · both terms are multiplied by bl20, which is exactly zero
+       once the footprint passes half a cycle at 20 cycles per blade — every
+       leaf at the arrival distance. A branch makes that zero free: 2.45 ms of
+       the desktop frame, byte-identical output wherever bl20 was already 0. */
+    float ret=0.0,tert=0.0;
+    if(bl20>0.0){
+    ret=(bfbm(vec3(u*20.0,v*12.0,vLf*2.7))*0.6+bnoise(vec3(u*44.0,v*25.0,vLf*5.1))*0.4*bl44)*bl20;
+    tert=smoothstep(0.5,0.85,bfbm(vec3(u*30.0,v*18.0,vLf*4.2)))
               *smoothstep(0.1,0.4,aN)*smoothstep(0.03,0.12,nearU)*dAttL2*bl20*0.16; // tertiary areoles
+    }
+#else
+    float ret=0.5,tert=0.0;
+#endif
     lH=mid*0.55+lat*0.24+lDome*0.10+ret*0.05+tert*0.10;
     lRim=1.0-smoothstep(0.0,0.05,rimD);
     vec3 c=diffuseColor.rgb;
@@ -3435,7 +3737,11 @@ ${NOISE_GLSL}`)
     c=mix(c,c*vec3(0.90,1.00,0.98),smoothstep(0.38,0.0,lfH)*0.5);      // some bluer-green
     c*=0.982+0.036*ret*dAttL2;                                      // faint cellular mottle (fades with the rest)
     c*=0.97+0.06*lDome;
+#if (SLICE & 64)==0
     float agedF=smoothstep(0.55,0.9,bfbm(vec3(u*3.1,v*2.2,vLf*11.0)));// per-leaf age/health patches
+#else
+    float agedF=0.0;
+#endif
     c=mix(c,c*vec3(1.1,1.04,0.78),agedF*0.3);
     c=mix(c,c*vec3(1.05,1.05,0.99),mid*uVein.z*0.28);         // pale midrib
     c=mix(c,c*vec3(0.94,0.96,0.93),lat*uVein.z*0.2*mix(0.4,1.0,dAttL2)); // laterals: subtle groove tone
@@ -3468,22 +3774,34 @@ ${NOISE_GLSL}`)
 }`)
       .replace('#include <roughnessmap_fragment>',`#include <roughnessmap_fragment>
 if(vLUv.y<1.5){
-  roughnessFactor=clamp(roughnessFactor+lVein*0.10-lDome*0.06
-    +(bfbm(vec3(vLUv.x*9.0,vLUv.y*7.0,vLf))-0.5)*0.05,0.22,0.85);
+#if (SLICE & 64)==0
+  // fix-40/F1 · the roughness grain is 9x7 cycles per blade: sub-pixel on any leaf under ~40 px, where it only averaged to zero
+  float rgh=0.0;
+  if(fwidth(vLUv.x)<0.025)rgh=(bfbm(vec3(vLUv.x*9.0,vLUv.y*7.0,vLf))-0.5)*0.05;
+  roughnessFactor=clamp(roughnessFactor+lVein*0.10-lDome*0.06+rgh,0.22,0.85);
+#else
+  roughnessFactor=clamp(roughnessFactor+lVein*0.10-lDome*0.06,0.22,0.85);
+#endif
 }
 if(!gl_FrontFacing)roughnessFactor=min(1.0,roughnessFactor+0.42);
 roughnessFactor=mix(roughnessFactor,0.38,uRain*0.42);`)
       .replace('#include <normal_fragment_maps>',`#include <normal_fragment_maps>
+#if (SLICE & 128)==0
 if(vLUv.y<1.5){
+  float dAttL=1.0/(1.0+length(vViewPosition)*0.8);
+  // fix-40/F1 · the relief is scaled by dAttL, 0.06 at the arrival distance: four derivatives and a normalize for a perturbation no pixel shows. Kept inside ~9 m (the dive).
+  if(dAttL>0.12){
   vec3 sp=-vViewPosition;
   vec3 sx=dFdx(sp),sy=dFdy(sp);
   vec3 r1=cross(sy,normal),r2=cross(normal,sx);
   float det=dot(sx,r1);
-  float dAttL=1.0/(1.0+length(vViewPosition)*0.8);
   vec3 grad=sign(det)*(dFdx(lH)*r1+dFdy(lH)*r2);
   normal=normalize(abs(det)*normal-0.0028*dAttL*grad);
-}`)
+  }
+}
+#endif`)
       .replace('#include <lights_fragment_end>',`#include <lights_fragment_end>
+#if (SLICE & 256)==0
 {
   if(vLUv.y<1.5){
     // v4.1/S-01: the custom sun response now works in ONE space — uSunV (world light-
@@ -3518,7 +3836,8 @@ if(vLUv.y<1.5){
   }else{
     reflectedLight.indirectDiffuse+=diffuseColor.rgb*0.12*uEnvI;
   }
-}`);
+}
+#endif`);
     mat.userData.shader=sh;
   };
   return mat;
@@ -3904,8 +4223,12 @@ float gband(float f){float w=fwidth(vGP.x)+fwidth(vGP.z);return 1.0-smoothstep(0
   // it tints the albedo here and drives a close-range micro-normal below, so the soil
   // has physical tooth at inspection distance instead of flat colour + pixel noise.
   float clod=SFBM(vGP*vec3(3.0,5.0,3.0)+3.7);
-  float grain=SNOISE(vGP*18.0)*gband(18.0);
-  float grit=SNOISE(vGP*60.0)*gband(60.0);
+  /* fix-40/F1 · the band limit is exactly zero past half a cycle per footprint;
+     a branch makes that zero free instead of a multiply. Exact where it was 0. */
+  float gb18=gband(18.0),gb60=gband(60.0);
+  float grain=0.0,grit=0.0;
+  if(gb18>0.0)grain=SNOISE(vGP*18.0)*gb18;
+  if(gb60>0.0)grit=SNOISE(vGP*60.0)*gb60;
   gSoilH=clod*0.55+grain*0.30+grit*0.15;
   soil*=0.84+(0.16*clod+0.12*grain+0.08*grit)*uRelief;   // Section B review 1: low sun sees a calmer modulation
   float rlf=mix(0.55,1.0,uRelief);
@@ -3934,7 +4257,8 @@ ${EM?`  // Earth & Moss: the banyan's shade builds a HUMUS APRON to the
   soil=mix(soil,uMoist,clamp(moist,0.0,1.0)*uEco);
 ${EM?`  // Earth & Moss: restrained mineral specks only — the broad organic
   // reading of the near field comes from the widened humus band below.
-  float speck=smoothstep(0.85,0.95,SNOISE(vGP*vec3(14.0,30.0,14.0)))*gband(30.0)*uEco;
+  float gb30=gband(30.0),speck=0.0;
+  if(gb30>0.0)speck=smoothstep(0.85,0.95,SNOISE(vGP*vec3(14.0,30.0,14.0)))*gb30*uEco;   // fix-40/F1 · exact where the band limit is 0
   ${PATH?'speck*=1.0-smoothstep(0.06,0.4,vPath);':''}
   soil=mix(soil,uSoilB*1.15,speck*0.2*smoothstep(0.6,2.2,r));`
 :`  float speck=smoothstep(0.78,0.92,SNOISE(vGP*vec3(14.0,30.0,14.0)))*gband(30.0)*uEco;
@@ -3958,7 +4282,9 @@ ${EM?`  // Phase 3 · Earth & Moss: moss seeks the HUMID PLACES — the moisture
   moss=max(moss,halo*smoothstep(0.30,0.62,mossN));`}
   moss*=0.72+0.28*SNOISE(vGP*vec3(9.0,5.0,9.0));
   ${PATH?'moss*=1.0-smoothstep(0.06,0.45,vPath);   // nothing soft survives the treading':''}
-  vec3 mossC=(vec3(0.10,0.22,0.07)+vec3(0.10,0.15,0.06)*smoothstep(0.35,0.85,mossN))*(0.8+0.45*SNOISE(vGP*22.0)*gband(22.0));
+  float gb22=gband(22.0),mossG=0.0;
+  if(gb22>0.0)mossG=SNOISE(vGP*22.0)*gb22;   // fix-40/F1 · exact where the band limit is 0
+  vec3 mossC=(vec3(0.10,0.22,0.07)+vec3(0.10,0.15,0.06)*smoothstep(0.35,0.85,mossN))*(0.8+0.45*mossG);
   soil=mix(soil,mossC,clamp(moss,0.0,1.0)*0.92);
 ${EM?`  /* fix-16/A2 · THE ARRIVAL FRAME'S BIGGEST SURFACE.
 
@@ -4108,6 +4434,7 @@ function buildLitter(S,groundH,canopyR,eRng,count,windU){
   addHorizonMelt(mat);   // Phase 1: litter dissolves with the melted soil
   const mesh=new THREE.InstancedMesh(g,mat,N);
   mesh.receiveShadow=true;
+  mesh.castShadow=captureStill;   // fix-40 · still tier: a 4.8 mm texel can carry a leaf's shadow; a 19 mm one could not
   const m=new THREE.Matrix4(),q=new THREE.Quaternion(),e=new THREE.Euler(),sc=new THREE.Vector3(),col=new THREE.Color();
   for(let i=0;i<N;i++){
     const u=eRng(),a=eRng()*Math.PI*2;
@@ -5514,6 +5841,7 @@ try{
     if(emPlateFace&&emPlateFaceArgs){
       const old=emPlateFace.material.map;
       emPlateFace.material.map=emMakePlateTexture(emPlateFaceArgs.name,emPlateFaceArgs.dates,plateState.shape);
+      if(emPlateFace.material.map.userData.bump){emPlateFace.material.bumpMap=emPlateFace.material.map.userData.bump;emPlateFace.material.needsUpdate=true}   // fix-40 · still tier
       emPlateFace.material.needsUpdate=true;
       if(old)old.dispose();
     }
@@ -5529,6 +5857,8 @@ function emMakePlateTexture(name,dates,shape){
   const cv=document.createElement('canvas');
   cv.width=1024;cv.height=512;
   const c=cv.getContext('2d');
+  // fix-40 · still tier: the same drawing at twice the resolution (every coordinate below is in the 1024x512 space)
+  if(captureStill){cv.width=2048;cv.height=1024;c.scale(2,2)}
   c.clearRect(0,0,1024,512);
   const NM=(name||'').toUpperCase();
   const FACE=`'EBMarcellus', Georgia, 'Times New Roman', serif`;
@@ -5586,7 +5916,19 @@ function emMakePlateTexture(name,dates,shape){
   }
   const tex=new THREE.CanvasTexture(cv);
   tex.colorSpace=THREE.SRGBColorSpace;
-  tex.anisotropy=4;
+  tex.anisotropy=captureStill?16:4;
+  /* fix-40 · still tier: the incision as RELIEF. The engraving was a dark fill
+     with a light kiss — a painted cut. From the same canvas, the alpha channel
+     is the cut's depth map (letters 0.96, the kiss 0.55, stone 0), so a bump
+     map with a negative scale sinks the letters and lets the bevel catch the
+     sun at 100 %. Live pages never load it (no bumpMap unless stills=1). */
+  if(captureStill){
+    const w=cv.width,h=cv.height,src=c.getImageData(0,0,w,h),dst=c.createImageData(w,h);
+    for(let i=0;i<w*h;i++){const a=src.data[i*4+3];dst.data[i*4]=dst.data[i*4+1]=dst.data[i*4+2]=a;dst.data[i*4+3]=255}
+    const cb=document.createElement('canvas');cb.width=w;cb.height=h;cb.getContext('2d').putImageData(dst,0,0);
+    const bump=new THREE.CanvasTexture(cb);bump.colorSpace=THREE.NoColorSpace;bump.anisotropy=16;
+    tex.userData.bump=bump;
+  }
   return tex;
 }
 
@@ -5638,7 +5980,8 @@ function buildNameplateEM(def,groundH){
   // engraved face: a hair proud of the slab, alpha-tested canvas text
   const face=new THREE.Mesh(new THREE.PlaneGeometry(W*.92,H*.82),
     new THREE.MeshStandardMaterial({map:def.tex,transparent:true,roughness:.88,metalness:0,
-      polygonOffset:true,polygonOffsetFactor:-1.5,polygonOffsetUnits:-2}));
+      polygonOffset:true,polygonOffsetFactor:-1.5,polygonOffsetUnits:-2,
+      ...(def.tex.userData.bump?{bumpMap:def.tex.userData.bump,bumpScale:-0.006}:{})}));   // fix-40 · still tier relief
   face.position.z=T/2+.0035;
   face.receiveShadow=true;
   grp.add(face);
@@ -6148,8 +6491,19 @@ mark('pre-gl');
    turns it off at the context, and turns off the alphaToCoverage that forces
    it back on (see makeLeafMaterial). Desktop is untouched. */
 const MOBILE_PATH=Qx.id==='mobile';
+/* fix-40 · SLICE: a diagnostic bitmask (?slice=<int>, default 0 = every block
+   on, byte-identical programs) that switches individual shader blocks off so
+   a rig — or a phone with no console — can measure what each one costs. Bits:
+   bark 1 macro fields · 2 twig/root close-range · 4 colonisation/mottle/scar
+   · 8 relief normal; leaf 32 venation loop · 64 reticulation/age/roughness
+   noise · 128 relief normal · 256 translucency/wax; soil 512 micro-normal ·
+   1024 clod-patch warp + far drift · 2048 moss · 4096 humus/duff/speck/heave
+   · 8192 wet pockets · 16384 base tone/clod/grain/grit. Never a product knob:
+   the Studio forwards nothing but its own boot params. */
+const SLICE=Math.max(0,parseInt(Q.get('slice')||'0',10)||0);
 const renderer=new THREE.WebGLRenderer({antialias:Q.get('aa')!=='0'&&!MOBILE_PATH,powerPreference:'high-performance'});
 mark('post-gl');
+ebBarkBakeProgramStart();   // fix-40 phone round · link the bark-bake program now; the driver compiles it while the CPU grows the tree
 renderer.toneMapping=THREE.ACESFilmicToneMapping;
 renderer.shadowMap.enabled=Q.get('shadow')!=='0';
 /* fix-16/A3 · Qx.soft is the PCF tap radius in texels (see applyShadowFilter at
@@ -6174,7 +6528,7 @@ function setShadowFilter(){
    replaces the tree's. */
 let shadowProgramSig=null;
 function refreshShadowPrograms(){
-  const sig=renderer.shadowMap.type+'/'+(shadowTentInstalled?1:0);
+  const sig=renderer.shadowMap.type+'/'+(shadowTentInstalled?1:0)+'/'+(hwShadowInstalled?1:0);
   if(sig===shadowProgramSig)return;
   shadowProgramSig=sig;
   scene.traverse(o=>{const m=o.material;if(!m)return;
@@ -6249,7 +6603,15 @@ const soilU={uSoilA:{value:new THREE.Color(0x6b5138)},uSoilB:{value:new THREE.Co
 /* lights (persistent; scene data drives values) */
 const sun=new THREE.DirectionalLight(0xffffff,3);
 sun.castShadow=true;
-sun.shadow.mapSize.set(Qx.shadow,Qx.shadow);
+/* fix-40 · THE STILL TIER (stills=1, the fulfilment portrait only). A 4K frame
+   has a 4 mm pixel; the live 1024 map has a 19 mm texel, which is why the root
+   contact was a ±5 cm smudge at 100 %. The still gets a 4096 map (4.8 mm per
+   texel), the hardware kernel widened to 8x8 taps at 2-texel steps so the
+   canopy penumbra stays in millimetres, and a blocker search (PCSS) so a
+   pebble's shadow is sharp where a canopy's is soft. Presentation only; the
+   digests do not see a shadow map. Bias scales with the texel as fix-16/A3 set. */
+const SHADOW_SIZE=captureStill?4096:Qx.shadow;
+sun.shadow.mapSize.set(SHADOW_SIZE,SHADOW_SIZE);
 /* fix-16/A3 · bias is a function of TEXEL SIZE, so it now scales with the
    preset's map instead of being pinned to the 1024 the balanced preset happens
    to use — `high` runs 2048 and would otherwise carry twice the bias it needs.
@@ -6258,7 +6620,8 @@ sun.shadow.mapSize.set(Qx.shadow,Qx.shadow);
    `radius` is set for completeness; PCF_SOFT does not read it (that is exactly
    the finding at the top of this module) and Basic does not either. */
 sun.shadow.radius=setShadowFilter();
-sun.shadow.bias=-.0012*(1024/Qx.shadow);sun.shadow.normalBias=.08*(1024/Qx.shadow)+.012;
+sun.shadow.bias=-.0012*(1024/SHADOW_SIZE);sun.shadow.normalBias=.08*(1024/SHADOW_SIZE)+.012;
+ebShadowTarget(sun,SHADOW_SIZE);   // fix-40/F2
 scene.add(sun,sun.target);
 const hemi=new THREE.HemisphereLight(0xffffff,0x444444,.6);scene.add(hemi);
 const fill=new THREE.DirectionalLight(0xffffff,.3);scene.add(fill);
@@ -6308,8 +6671,14 @@ function build(){
   wood=new THREE.Mesh(woodGeo,barkMat);
   wood.castShadow=true;wood.receiveShadow=true;
   wood.customDepthMaterial=woodDepthMat=makeWoodDepthMaterial(windU);   // v4.1/S-01
+  wood.updateMatrixWorld(true);
+  ebBakeBarkFields(woodGeo,wood.matrixWorld,barkMat);   // fix-40 phone round · the five bark fields, once, on the GPU (WebGL2)
   scene.add(wood);
-  foliage=buildFoliage(S,sk.anchors,leafMat,folMul*Qx.sprigMul,Qx.leafDetail??1,seasonNow().tipCover??1);
+  /* fix-40 · still tier: the finer lamina grid (leafDetail 1). The sprig
+     template is stream-free and unhashed — checksum(), geometry.report() and
+     the anchors are byte-identical either way; only the blade's tessellation
+     changes, which is what the 100 % crop of a kite-shaped leaf was showing. */
+  foliage=buildFoliage(S,sk.anchors,leafMat,folMul*Qx.sprigMul,captureStill?1:(Qx.leafDetail??1),seasonNow().tipCover??1);
   const tFol=performance.now();
   foliage.mesh.customDepthMaterial=leafDepthMat=makeLeafDepthMaterial(S,windU);   // v4.1/S-01
   scene.add(foliage.mesh);
@@ -6851,6 +7220,7 @@ function fitShadows(){
   const cam=sun.shadow.camera;
   cam.left=-r;cam.right=r;cam.top=r;cam.bottom=-r;
   cam.near=.5;cam.far=80;   // stature: depth range covers 10u trees from a 30u sun
+  ebShadowWorldU.value.set(2*r,cam.far-cam.near);   // fix-40 · the still tier's blocker search works in metres
   const dir=new THREE.Vector3().copy(sun.position).sub(sun.target.position);
   if(dir.lengthSq()<1e-6)dir.set(-2.4,1.15,1.7);
   dir.normalize();
@@ -7113,6 +7483,7 @@ let syncSeasonControl=()=>{};
     sun.shadow.mapSize.set(Qx.shadow,Qx.shadow);sun.shadow.radius=setShadowFilter();refreshShadowPrograms();
     sun.shadow.bias=-.0012*(1024/Qx.shadow);sun.shadow.normalBias=.08*(1024/Qx.shadow)+.012;
     sun.shadow.map&&(sun.shadow.map.dispose(),sun.shadow.map=null);
+    ebShadowTarget(sun,Qx.shadow);   // fix-40/F2
     sizeToStage();rebuildAll()});
   $('p-age').value=ageY;$('p-age-v').textContent=ageY;
   $('p-age').addEventListener('input',()=>{$('p-age-v').textContent=$('p-age').value});
@@ -7131,13 +7502,42 @@ function rebuildSeason(){const v={az:orbit.az,el:orbit.el,dist:orbit.dist,tgt:or
   orbit.gAz=v.gAz;orbit.gEl=v.gEl;orbit.gDist=v.gDist;orbit.gTgt.copy(v.gTgt);}
 
 /* resize */
+/* fix-40/F6 · while a finger (or a mouse) is dragging, a dense display renders
+   at pixel ratio 1 instead of the preset's cap; motion hides the softness and
+   the phone gets 1.56x fewer pixels exactly when the drag floor is measured.
+   Inert on a dpr-1 desktop. Driven by setInteracting() — the adapter infers it
+   from its own gesture entry points — and by this page's own pointer events. */
+let interacting=false;
 function sizeToStage(){
   const w=Math.max(1,stage.clientWidth),h=Math.max(1,stage.clientHeight);
-  renderer.setPixelRatio(Math.min(devicePixelRatio||1,Qx.dpr));
+  const cap=interacting&&!captureStill&&Q.get('dragdpr')!=='0'?Math.min(Qx.dpr,1):Qx.dpr;
+  renderer.setPixelRatio(Math.min(devicePixelRatio||1,cap));
   renderer.setSize(w,h);
   camera.aspect=w/h;
   camera.updateProjectionMatrix();
 }
+function setInteracting(on){
+  on=!!on;if(on===interacting)return;
+  interacting=on;
+  if((devicePixelRatio||1)>1&&Qx.dpr>1)sizeToStage();
+}
+/* fix-40/F5 · IDLE CADENCE. Nothing in the loop knew whether anyone was
+   looking: a memorial page at rest drew the full frame sixty times a second
+   forever, which on a phone is heat and on a laptop is the fan. When the pose
+   has not changed for 400 ms the loop draws every other frame; the clocks,
+   the meter (which the fill-rate guard reads) and the camera still tick every
+   frame, so nothing drifts and the guard sees the true cadence. Any pose
+   change, pointer event or drag restores 60 at once. Off for stills, and
+   with ?idle=0. */
+let lastInteractAt=performance.now();
+/* MEASURED 2026-09-03 and turned OFF by default: at half cadence the reference
+   iGPU clocks down, so each drawn frame cost 21.8 ms instead of 12.6 — busy
+   time fell 13 %, per-frame latency doubled, and the canopy sway dropped to
+   30 Hz. Not a trade worth the owner's eye on the live page. ?idle=1 enables
+   it for the phone experiment, where a tile GPU's power curve may differ. */
+const IDLE_CADENCE=Q.get('idle')==='1';
+const touchInteract=()=>{lastInteractAt=performance.now()};
+for(const ev of ['pointerdown','pointermove','wheel','touchstart','touchmove','keydown'])addEventListener(ev,touchInteract,{passive:true});
 let resizeTimer=0;
 addEventListener('resize',()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>{
   if(qualityMode==='auto'){
@@ -7145,7 +7545,7 @@ addEventListener('resize',()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(
     if(next.id!==Qx.id){Qx=next;sun.shadow.mapSize.set(Qx.shadow,Qx.shadow);sun.shadow.radius=setShadowFilter();refreshShadowPrograms();
       sun.shadow.bias=-.0012*(1024/Qx.shadow);sun.shadow.normalBias=.08*(1024/Qx.shadow)+.012;
       renderer.shadowMap.needsUpdate=true;
-      sun.shadow.map&&(sun.shadow.map.dispose(),sun.shadow.map=null);sizeToStage();rebuildAll();return}
+      sun.shadow.map&&(sun.shadow.map.dispose(),sun.shadow.map=null);ebShadowTarget(sun,Qx.shadow);sizeToStage();rebuildAll();return}
   }
   sizeToStage();fitCamera(false);applyScene();
 },120)});   // V5: auto quality follows resize/orientation only when the preset changes
@@ -7685,9 +8085,91 @@ buildEnvironment();
 applyScene();
 mark('env');
 windU.uWind.value=initialWind*(S.wind??1)*(seasonNow().wind??1);
-applyOrbit(1);renderer.render(scene,camera);
-window.__treeBootReady?.();
-document.getElementById('boot-status').hidden=true;
+applyOrbit(1);
+/* fix-40/F3 · the first frame used to be ONE synchronous renderer.render() here,
+   where every program compiled — 5.7 s of a 6.6 s first visit on the reference
+   desktop, on the main thread the Studio shares, so the whole page froze for
+   it. compileAsync() links every scene program up front and, where
+   KHR_parallel_shader_compile exists (Chrome), the driver compiles on its own
+   threads while this thread stays free; the loop below draws nothing until the
+   programs report ready, so nothing stalls. Without the extension compileAsync
+   degrades to the old synchronous compile — same timing, same order. The
+   handle's stature() stays null until the first frame is drawn, so "ready" to
+   the adapter still means "a frame exists". `stills=1` (the fulfilment worker)
+   and ?compile=sync keep the old synchronous path: the worker does not care
+   about a frozen tab and must never see a ready handle before a drawn frame. */
+let bootCompiled=false;
+/* fix-40/F3 · WHICH PATH. Measured on the reference desktop (review/fix/40,
+   2026-09-03): the parallel path READS a warm Chrome program cache but never
+   FILLS one, and a synchronous link is what fills it. So a returning visitor
+   whose cache is warm is best served synchronously (0.2 s, and the cache stays
+   warm), and a first-time visitor by the parallel path (3.9 s instead of 6.6,
+   page responsive). Which visitor this is can be read from the cache itself:
+   one small fixed program, linked synchronously here, takes ~1 ms warm and
+   tens of milliseconds cold. */
+function ebProgramCacheWarm(){
+  try{
+    const gl=renderer.getContext(),t0=performance.now();
+    const vs=gl.createShader(gl.VERTEX_SHADER),fs=gl.createShader(gl.FRAGMENT_SHADER),pr=gl.createProgram();
+    gl.shaderSource(vs,'attribute vec3 position;varying vec2 vUv;void main(){vUv=position.xy;gl_Position=vec4(position,1.0);}');
+    gl.shaderSource(fs,'precision highp float;varying vec2 vUv;float h(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}'+
+      'float n(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);return mix(mix(h(i),h(i+vec2(1,0)),f.x),mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x),f.y);}'+
+      'void main(){float a=0.0,w=0.5;vec2 p=vUv*8.0;for(int i=0;i<6;i++){a+=w*n(p);p=p*2.03+vec2(1.7,9.2);w*=0.5;}'+
+      'vec3 c=vec3(a,a*a,sqrt(a));for(int j=0;j<4;j++){c=mix(c,c.gbr*vec3(0.9,1.1,1.0),n(p*float(j+1))*0.2);}gl_FragColor=vec4(c,1.0);}');
+    gl.compileShader(vs);gl.compileShader(fs);gl.attachShader(pr,vs);gl.attachShader(pr,fs);gl.linkProgram(pr);
+    const ok=gl.getProgramParameter(pr,gl.LINK_STATUS);
+    gl.deleteProgram(pr);gl.deleteShader(vs);gl.deleteShader(fs);
+    const ms=performance.now()-t0;
+    mark('cache-probe:'+ms.toFixed(1)+'ms');
+    return ok&&ms<8;
+  }catch(e){return false}
+}
+const finishBoot=()=>{if(bootCompiled)return;mark('compiled');renderer.render(scene,camera);bootCompiled=true;mark('first-frame');
+  window.__treeBootReady?.();document.getElementById('boot-status').hidden=true};
+/* fix-40/F3 · SLICED. compileAsync() gave a faster first frame (3.9 s against
+   6.6) but it neither reads a cold cache into a warm one nor fills it, so
+   every later visit stayed at 2-4 s; and a link that repeats an already-linked
+   source is de-duplicated in memory and never reaches the disk cache either
+   (both measured, review/fix/40/2026-09-03). Only a genuinely cold synchronous
+   link fills the cache. So a cold visit links synchronously, but one object's
+   programs per animation frame with the boot overlay up, so the page is free
+   between slices and the longest stall is one program, not all sixteen; and
+   the next visit finds a warm cache and takes the single-frame path. */
+function ebCompileSliced(done){
+  /* Where the time actually goes: on Chrome the driver compiles every program
+     in the background the moment it is linked (KHR_parallel_shader_compile),
+     and the main thread only blocks when a program's link STATUS is first
+     read — which Three does at first use, i.e. inside the first render, for
+     all of them at once. So: issue every link now (fast), then read one
+     program's status per animation frame. The driver compiles them all in
+     parallel meanwhile; each slice waits only for its own program; the
+     synchronous status read is what fills Chrome's program cache. */
+  try{renderer.compile(scene,camera)}catch(e){}
+  const progs=renderer.info.programs.slice();
+  let i=0;
+  /* fix-40 phone round · TIME-BUDGETED, not one-per-frame. Measured on the
+     iPhone 13 (review/fix/40/2026-09-03/phone/BENCH-PAIR.md): its driver
+     compiled all seventeen programs inside the pre-40 synchronous first frame
+     in ~0.35 s, but this loop then spent sixteen animation frames reading one
+     status each — ~0.5 s of pure sequencing at a 30–40 fps boot cadence — and
+     the visit booted 811 → 1 275 ms. So: keep reading statuses back to back
+     while this frame has budget left; a read that BLOCKS (a program the
+     driver has not finished) blows the budget and yields, so the longest
+     stall is still one program on a slow compiler, while a fast compiler
+     gets through the whole list in a frame or two. */
+  const SLICE_BUDGET_MS=6;
+  const step=()=>{
+    const t0=performance.now();
+    while(i<progs.length&&performance.now()-t0<SLICE_BUDGET_MS){try{progs[i].getUniforms()}catch(e){}i++}
+    if(i<progs.length){requestAnimationFrame(step);return}
+    done();
+  };
+  requestAnimationFrame(step);
+}
+const compileMode=Q.get('compile');
+if(captureStill||compileMode==='sync'||(compileMode!=='async'&&compileMode!=='sliced'&&ebProgramCacheWarm())){mark('compile:sync');finishBoot()}
+else if(compileMode==='async'){mark('compile:async');window.__treeBootPending?.();renderer.compileAsync(scene,camera).then(finishBoot,finishBoot)}
+else{mark('compile:sliced');window.__treeBootPending?.();ebCompileSliced(finishBoot)}
 
 /* ================= Phase 0 stature harness (2026-07-11) =================
    Harness-only URL params. Contract: ZERO effect when absent, ZERO rng-stream
@@ -7893,9 +8375,9 @@ if(REVIEW_MODE){
 
 /* loop */
 const clock=new THREE.Clock();
-let fpsA=60,lastStats=0;
+let fpsA=60,lastStats=0,idleNow=false,idleFrame=0;
 renderer.setAnimationLoop(()=>{
-  if(document.hidden){clock.getDelta();return}
+  if(document.hidden||!bootCompiled){clock.getDelta();return}   // fix-40/F3 · no frame before the programs are ready
   const dt=Math.min(clock.getDelta(),.1);
   windU.uT.value+=dt;
   // §7E.3 · advance the weather clock UNLESS this is a still (reduced-motion or a
@@ -7907,8 +8389,11 @@ renderer.setAnimationLoop(()=>{
   else if(camMode==='explore')applyExplore(dt);
   else{applyOrbit(dt);
     if(Math.abs(camera.fov-ORBIT_FOV)>.05){camera.fov+=(ORBIT_FOV-camera.fov)*.08;camera.updateProjectionMatrix()}}
-  renderer.render(scene,camera);
   const now=performance.now();
+  // fix-40/F5 · at rest, draw every other frame (clocks, meter and camera ticked above)
+  idleNow=IDLE_CADENCE&&!captureStill&&camMode==='orbit'&&(now-lastInteractAt>400);
+  idleFrame=(idleFrame+1)&1;
+  if(!(idleNow&&idleFrame))renderer.render(scene,camera);
   if(now-lastStats>800){
     lastStats=now;
     statsEl.textContent=`build ${buildInfo.ms}ms · ${(buildInfo.tris/1000).toFixed(0)}k tri · ${renderer.info.render.calls} draws · ${fpsA.toFixed(0)}fps`;
@@ -7939,6 +8424,9 @@ window.v3=window.banyan={
   setWeather(id){const v=(id==null||id==='none')?'none':String(id);if(v!=='none'&&!PUBLIC_WEATHER_IDS.has(v))return false;weatherId=v;applyScene();return true},
   setView(az,el,dist,tx,ty,tz){const v=[az,el,dist];if(!v.every(Number.isFinite))return false;
     if(tx!=null&&![tx,ty??orbit.gTgt.y,tz??orbit.gTgt.z].every(Number.isFinite))return false;
+    // fix-40/F5 · the adapter pushes every frame; only a pose that actually MOVED counts as interaction
+    if(Math.abs(az-orbit.gAz)>1e-6||Math.abs(clamp(el,-.75,1.35)-orbit.gEl)>1e-6||Math.abs(clamp(dist,6,95)-orbit.gDist)>1e-5
+      ||(tx!=null&&(Math.abs(tx-orbit.gTgt.x)>1e-5||Math.abs((ty??orbit.gTgt.y)-orbit.gTgt.y)>1e-5||Math.abs((tz??orbit.gTgt.z)-orbit.gTgt.z)>1e-5)))lastInteractAt=performance.now();
     orbit.gAz=az;orbit.gEl=clamp(el,-.75,1.35);orbit.gDist=clamp(dist,6,95);orbit.az=orbit.gAz;orbit.el=orbit.gEl;orbit.dist=orbit.gDist;
     if(tx!=null){orbit.gTgt.set(tx,ty??orbit.gTgt.y,tz??orbit.gTgt.z);orbit.tgt.copy(orbit.gTgt)}return true},
   setWind(w){w=Number(w);if(!Number.isFinite(w))return false;w=reducedMotion?0:clamp(w,0,1);windU.uWind.value=w*(S.wind??1)*(seasonNow().wind??1);return w},
@@ -8154,7 +8642,7 @@ window.v3=window.banyan={
     out.emblemEnvelope=emEmblemEnv?{...emEmblemEnv}:null;   // §7C.5
     return out;
   },
-  stature:()=>statureProbe(),
+  stature:()=>bootCompiled?statureProbe():null,   // fix-40/F3 · null until a frame has been drawn (ready = first frame, as before)
   /* 3-4 I-P34-001/002 · SILHOUETTE PROBE. The Gold rules forbid a radial
      umbrella/dome form, but nothing in the renderer could MEASURE one, so
      "seed 490 is an even, symmetric dome" was a sentence in a manifest rather
@@ -8254,7 +8742,8 @@ window.v3=window.banyan={
        angel and cherub statuary, and any literal rainbow-bridge structure, are
        deliberately not built and are not reachable through any id. */
     refusedObjects:['angel','cherub','rainbow-bridge','faith']},   // 2 = Phase 5 full surface; §7E skin+weather; faith emblems live only in the reviewed memorial product
-  stats:()=>({...buildInfo,calls:renderer.info.render.calls,fps:Math.round(fpsA),
+  setInteracting,   // fix-40/F6 · the adapter says when a drag starts and ends
+  stats:()=>({...buildInfo,calls:renderer.info.render.calls,fps:Math.round(fpsA),idle:idleNow,interacting,pixelRatio:renderer.getPixelRatio(),barkBaked:!!(barkMat&&barkMat.userData.barkBaked),
     sprigs:foliage?foliage.mesh.count:0,quality:Qx.id,species:speciesId,seed,scene:sceneId,season:seasonId,
     ground:groundId,approach:approachId,object:{...objectState},nameplate:!!plateState.name,
     skin:skinId,weather:weatherId}),
