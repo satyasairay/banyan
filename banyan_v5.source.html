@@ -6395,7 +6395,7 @@ const hud=document.getElementById('hud');
 const statsEl=document.getElementById('stats');
 const Q=new URLSearchParams(location.search);
 const REVIEW_MODE=Q.get('review')==='local'&&(location.hostname==='127.0.0.1'||location.hostname==='localhost');
-const PUBLIC_SPECIES_IDS=new Set(['banyan','cherry-blossom','magnolia']);
+const PUBLIC_SPECIES_IDS=new Set(['banyan']);   // the public study ships the banyan; magnolia is listed as coming soon and is not selectable
 const PUBLIC_SCENE_IDS=new Set(['golden-hour','noon','dusk']);   // §7C · dusk is a memorial light
 const reducedMotion=matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
 if(Q.get('ui')==='0')document.body.classList.add('noui');
@@ -7416,8 +7416,7 @@ function applyOrbit(dt){
 const $=id=>document.getElementById(id);
 const PUBLIC_SPECIES=[
   {id:'banyan',label:'Banyan',note:'Banyan-inspired prop-root canopy study'},
-  {id:'cherry-blossom',label:'Flowering cherry',note:'Flowering-cherry-inspired peak-bloom study'},
-  {id:'magnolia',label:'Flowering magnolia',note:'Magnolia-inspired evergreen flowering study'}
+  {id:'magnolia',label:'Flowering magnolia',note:'Magnolia-inspired evergreen flowering study',comingSoon:true}
 ];
 const PUBLIC_SCENES=[
   {id:'golden-hour',label:'Golden hour'},
@@ -7434,7 +7433,7 @@ let syncSeasonControl=()=>{};
   const selS=$('p-species');
   if(REVIEW_MODE){
     for(const id of Object.keys(SPECIES)){const o=document.createElement('option');o.value=id;o.textContent=SPECIES[id].name;selS.appendChild(o)}
-  }else for(const item of PUBLIC_SPECIES){const o=document.createElement('option');o.value=item.id;o.textContent=item.label;selS.appendChild(o)}
+  }else for(const item of PUBLIC_SPECIES){const o=document.createElement('option');o.value=item.id;o.textContent=item.comingSoon?item.label+' — coming soon':item.label;if(item.comingSoon)o.disabled=true;selS.appendChild(o)}
   selS.value=speciesId;
   const selC=$('p-scene');
   const shownScenes=REVIEW_MODE?Object.keys(SCENES).map(id=>({id,label:SCENES[id].name})):PUBLIC_SCENES;
@@ -8411,7 +8410,7 @@ window.v3=window.banyan={
     S=structuredClone(SPECIES[id]);applyAge(S,ageY);applySeason(S,speciesId,seasonId);seed=canonicalSeed(S.seed);
     const panelWind=Number(document.getElementById('p-wind').value);
     windU.uWind.value=(reducedMotion?0:(Number.isFinite(panelWind)?clamp(panelWind,0,1):initialWind))*(S.wind??1)*(seasonNow().wind??1);
-    document.getElementById('p-species').value=id;rebuildAll();return true},
+    if(!REVIEW_MODE&&!PUBLIC_SPECIES_IDS.has(id))return false;document.getElementById('p-species').value=id;rebuildAll();return true},
   setAge(y){if(!REVIEW_MODE)return false;ageY=clamp(+y||100,20,120);S=structuredClone(SPECIES[speciesId]);applyAge(S,ageY);applySeason(S,speciesId,seasonId);
     const el=document.getElementById('p-age');if(el){el.value=ageY;document.getElementById('p-age-v').textContent=ageY}
     rebuildAll();return ageY},

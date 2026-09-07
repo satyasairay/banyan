@@ -87,8 +87,8 @@ bytes on Windows and Linux. You do not have to trust the shipped file; check it.
 
 | File | SHA-256 (LF-normalized content) |
 |---|---|
-| `banyan_v5.html` | `E690706A907356253D45B8FB33AE62A4D79E8ED9FD9D79FF69CC4B9E69745B70` |
-| `banyan_v5.source.html` | `8205C282CE158189FDA8EFFF53D884BAF4E0ACC8A74C7DE2F00B060F8176132D` |
+| `banyan_v5.html` | `201B36553740823A7F3835064CBA00F8B52676FB3ECD02930A7474902AF22CC4` |
+| `banyan_v5.source.html` | `2BEDD59174981E8D2DDB8C64A6535860B735863312A8B7EEF4BC39479A157A5D` |
 
 ## The evolution
 
@@ -99,8 +99,9 @@ August 2026.
 
 ## What this build does not include
 
-The renderer grew inside [everbanyan.com](https://www.everbanyan.com), a living
-tree memorial for pets. Its remembrance objects for faith traditions are not
+Working use case: [everbanyan.com](https://www.everbanyan.com), a living tree
+memorial for pets, is where this renderer grew and where it runs in production. Its
+remembrance objects for faith traditions are not
 part of this public build — they stay behind the product's own review
 obligation, and the runtime's `capabilities.refusedObjects` says so explicitly
 rather than leaving their absence to guesswork.

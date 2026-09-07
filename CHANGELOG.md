@@ -26,9 +26,13 @@ this build, on the same hardware that certified the previous one.
 - Measured on a Radeon 740M in Chrome at `balanced`: 21.0 ms of GPU time per
   frame before, about 12.7 ms after. On an iPhone 13 a drag holds above 30 fps.
   A first visit on the phone did not get faster.
+- The public panel offers the banyan study only. The magnolia entry stays listed as
+  "coming soon" and cannot be selected; the cherry entry is gone; a `?species=` other
+  than banyan falls back to banyan. The engine data for the other studies is
+  unchanged and unreachable from the public surface.
 
-Runtime `E690706A907356253D45B8FB33AE62A4D79E8ED9FD9D79FF69CC4B9E69745B70`,
-source `8205C282CE158189FDA8EFFF53D884BAF4E0ACC8A74C7DE2F00B060F8176132D`.
+Runtime `201B36553740823A7F3835064CBA00F8B52676FB3ECD02930A7474902AF22CC4`,
+source `2BEDD59174981E8D2DDB8C64A6535860B735863312A8B7EEF4BC39479A157A5D`.
 Ported from the EverBanyan product renderer at commit `c65b102` (source
 `93262D959B30DD12D6932BE49F71B2B3E9FA3357FB3B1A25CBA7E7DBFC011944`), the build live on
 everbanyan.com since 2026-09-07; `gold/gold-banyan-1.json` is byte-identical to the
