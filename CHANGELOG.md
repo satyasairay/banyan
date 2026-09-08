@@ -14,7 +14,12 @@ reproduce their four digests on the same hardware.
 - The composed sky uniforms of an active skin are capped at 0.92 in linear light
   so the dome's additive sun bloom keeps headroom; Soft Dawn stops clipping its
   red channel over the lower sky.
-- Source `E7739AFB…`, runtime `5EDE8CB3…`, byte-for-byte on `--check`. Ported
+- The public build no longer offers the palettes or the weathers: `PUBLIC_SKIN_IDS` and
+  `PUBLIC_WEATHER_IDS` are empty, `?skin=` and `?weather=` fall back to the base look,
+  `capabilities` reads `skin:0, weather:0`, and the gallery's mist entry is withdrawn. The
+  light grades and the weathers are the product's paid enhancements, not part of this
+  study; the seam fix above stays in the source for the product's sake.
+- Source `D3CE5E7C…`, runtime `35004159…`, byte-for-byte on `--check`. Ported
   from the EverBanyan product at 67c1579 (Prompt 42).
 
 ## [study-2] — 2026-09-08 — the frame budget

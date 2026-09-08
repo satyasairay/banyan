@@ -16,16 +16,13 @@ exists tomorrow.
 tree. Or open `banyan_v5.html` straight off disk: one self-contained file, with
 three.js baked in by a reproducible build, so it needs no network at all. Drag
 to orbit, tap a leaf for botanical details, press "copy tree link" for a link that
-carries the seed, scene and season (ground and weather are not in the copied link
-yet — add them by hand). Deep links carry `?seed=&scene=&season=`.
+carries the seed, scene and season (the ground is not in the copied link yet — add
+it by hand). Deep links carry `?seed=&scene=&season=`.
 
 ## Gallery
 
 Each caption is a command: put it on the standalone's URL and the same tree
-grows for you, in the same ground and weather.
-
-![Banyan 863 "Sheltering" — stone grove, soft mist](docs/images/banyan-863-stone-grove-mist.jpg)
-`?seed=863&ground=stone-grove&weather=mist&scene=golden-hour`
+grows for you, in the same ground.
 
 | | |
 |---|---|
@@ -87,8 +84,8 @@ bytes on Windows and Linux. You do not have to trust the shipped file; check it.
 
 | File | SHA-256 (LF-normalized content) |
 |---|---|
-| `banyan_v5.html` | `5EDE8CB34F94B2AB1FDEC5BB0A962D2B0A855B6AEC39605F70231324F8ABEE1C` |
-| `banyan_v5.source.html` | `E7739AFBF88F05278F92D0F667699AAA1544FD180BB077CF56D051A8C7DF834F` |
+| `banyan_v5.html` | `35004159673F897D980CF695D9031E5470D3E321519FCB9DFAF0881051F1EE3A` |
+| `banyan_v5.source.html` | `D3CE5E7C25FB8584997ECDB0F55FC269FDF7E4D5413EDF0A13B3160348DB1E77` |
 
 ## The evolution
 

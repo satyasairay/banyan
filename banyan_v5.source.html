@@ -6443,8 +6443,8 @@ const OBJECT_SOCKETS=new Set(['front-centre','front-left','front-right','roots-l
 // geometry, so checksum()/geometry.report() are byte-identical to the base and
 // the Gold manifest stays valid. 'none' is the base look, always available;
 // snow was cut (founder) — rain + mist ship.
-const PUBLIC_SKIN_IDS=new Set(['warm-amber','cool-slate','soft-dawn']);
-const PUBLIC_WEATHER_IDS=new Set(['rain','mist']);
+const PUBLIC_SKIN_IDS=new Set([]);      // the light grades are the product's paid enhancements, not part of the study (2026-09-08)
+const PUBLIC_WEATHER_IDS=new Set([]);   // likewise the weathers; ?skin= and ?weather= fall back to the base look
 let groundId=PUBLIC_GROUND_IDS.has(Q.get('ground'))?Q.get('ground'):'earth-moss';
 let approachId=APPROACH_IDS.has(Q.get('approach'))?Q.get('approach'):'none';
 /* the visitor-arrival azimuth the approach anchors to (the Studio passes
@@ -8749,7 +8749,7 @@ window.v3=window.banyan={
      which is the contract prompt 10 established for the companion lantern and
      the only way to build a picker that never offers a missing object.
      nameplate 2 announces the portrait recess (A9). */
-  capabilities:{memories:1,ground:2,props:4,nameplate:2,skin:1,weather:1,
+  capabilities:{memories:1,ground:2,props:4,nameplate:2,skin:0,weather:0,
     objects:['none','stone','lantern','paw','toy','collar','bowl'],
     toyKinds:['ball','bone','yarn'],printKinds:['paw','nose'],
     nameplateShapes:Object.keys(NAMEPLATE_SHAPES),
