@@ -7118,6 +7118,13 @@ function applyScene(){
 /* §7E.2 · lay the active skin's colour grade over the uniforms applyScene just
    set. Runs on every applyScene; 'none' is a no-op. Pure colour, no rng, no
    rebuild — geometry and checksum() are untouched. */
+/* fix-42 · a grade must leave the ground melt and fog meeting the graded sky.
+   Keep none/none a strict no-op, including scenes with a flat background. */
+function meetHorizon(){
+  if(!skyDome.visible||(skinId==='none'&&weatherId==='none'))return;
+  horU.value.copy(skyU.uHorS.value);
+  if(scene.fog)scene.fog.color.copy(skyU.uHorS.value);
+}
 function applySkin(){
   premiumLookU.uSkinMul.value.set(1,1,1);premiumLookU.uSkinAmount.value=0;
   const sk=SKINS[skinId];if(!sk)return;
@@ -7135,12 +7142,20 @@ function applySkin(){
   L(soilU.uSoilA.value,sk.soilA);L(soilU.uSoilB.value,sk.soilB);L(soilU.uMoist.value,sk.moist);
   L(canopyU.uSunC.value,sk.canopy);
   if(sk.envI!=null)canopyU.uEnvI.value=clamp(canopyU.uEnvI.value*sk.envI,.15,1.4);
-  L(horU.value,sk.horizon);
   L(sun.color,sk.sun);
   if(sk.fill)L(fill.color,sk.fill);
   if(sk.hemiS)L(hemi.color,sk.hemiS);
   if(sk.hemiG)L(hemi.groundColor,sk.hemiG);
-  if(skyDome.visible){L(skyU.uTop.value,sk.sky);L(skyU.uHorS.value,sk.sky);L(skyU.uBloomC.value,sk.bloom);}
+  if(skyDome.visible){
+    L(skyU.uTop.value,sk.sky);L(skyU.uHorS.value,sk.sky);L(skyU.uBloomC.value,sk.bloom);
+    L(skyU.uHorS.value,sk.horizon);
+    // Linear-light headroom for the dome's additive bloom after the composed grade.
+    // The same ceiling covers Soft Dawn and Warm Amber; none never enters here.
+    for(const u of [skyU.uTop,skyU.uHorS]){
+      u.value.r=Math.min(u.value.r,.92);u.value.g=Math.min(u.value.g,.92);u.value.b=Math.min(u.value.b,.92);
+    }
+  }else L(horU.value,sk.horizon);
+  meetHorizon();
 }
 /* §7E.3 · weather ambiance. Mist softens the horizon into a low haze (uniform-
    only → always a still). Rain is a seeded particle overlay toggled here and
@@ -7177,6 +7192,7 @@ function applyWeather(){
   }
   ensureRain();
   if(rainMesh)rainMesh.visible=(weatherId==='rain');
+  meetHorizon();
 }
 /* Build the rain overlay ONCE (persistent, like the sky dome): a set of thin
    falling streaks in a column around the tree, seeded from an INDEPENDENT salted

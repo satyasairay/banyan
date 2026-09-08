@@ -1,5 +1,22 @@
 # Changelog
 
+## [study-3] — 2026-09-08 — the horizon meets the graded sky
+
+Colour only. No geometry, no rng, no shader change; `?skin=` and `?weather=`
+absent, the build draws the same pixels as study-2, and all ten gold seeds
+reproduce their four digests on the same hardware.
+
+- A skin or a weather grades the sky dome; the far ground melts into the sky it
+  meets and the fog is that same sky. Before this, the grade stopped at the dome
+  and the band below it kept the scene's own horizon colour, a one-row step
+  across the frame. After each grade the ground melt and the fog now copy the
+  dome's graded horizon, so the band carries the grade.
+- The composed sky uniforms of an active skin are capped at 0.92 in linear light
+  so the dome's additive sun bloom keeps headroom; Soft Dawn stops clipping its
+  red channel over the lower sky.
+- Source `E7739AFB…`, runtime `5EDE8CB3…`, byte-for-byte on `--check`. Ported
+  from the EverBanyan product at 67c1579 (Prompt 42).
+
 ## [study-2] — 2026-09-08 — the frame budget
 
 Nothing here moves the geometry. All ten gold seeds reproduce `checksum()`, the
