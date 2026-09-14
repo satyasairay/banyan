@@ -7,66 +7,10 @@
 <title>Living Trees V5 — procedural tree studies</title>
 <meta name="description" content="Living procedural tree studies, regenerated exactly from their seed.">
 <!--
-  V5 launch candidate · 2026-07-17
-  V4 remains untouched. V5 exposes only three selected tree studies; seven rejected
-  experiments remain available to the local review harness, not the public selector. A
-  V5.3 realism pass replaces Banyan's radial apex whorl with staggered load paths and a
-  terminal-covered inner roof, restores full-scale Cherry bloom, and lowers Magnolia's
-  evergreen skirt. Seed 863 is the pixel-vetted Banyan default from a 1,000-seed sweep.
-  reproducible standalone build. This readable source uses the pinned local Three.js module; run
-  tools/build-v5-standalone.mjs to produce the double-clickable offline V5 artifact.
-  explicit startup failure UX, semantic controls, and share/reset actions. The
-  review-only cameras, scenes, and diagnostics remain gated to local review mode;
-  V5 does not claim photorealistic or species-exact simulation.
-
-  banyan-bonsai_v4.html — v4.1 · 2026-07-12 release-audit remediation pass.
-  v4.1 executes the "Product Release Visual Audit — Banyan Tree v4" (NO-GO) fix list:
-   · F-01 leaf proportions — `widthRatio` is now an explicit FULL width:length contract
-     (half-width = 0.5·length·ratio; the audited build used the full product as a
-     half-width → blades ~1.32× wider than long). Species tip moved into geometry;
-     hi-quality lamina grid floors at 8×4 (was 5×2); a build-time self-test warns on
-     contract drift.
-   · F-01/F-03 margins — noisy binary fragment `discard` removed: the silhouette IS the
-     mesh outline. Serrated species use fwidth-smoothed coverage + alpha-to-coverage.
-     Venation/reticulation are band-limited by pixel footprint (no salt-and-pepper),
-     vein line widths floor at the footprint and fade instead of crawling.
-   · F-02 bark/root/soil — derivative band-limiting (bband) on all fine bark/ground
-     frequencies, wrinkle banding halved + warped, occlusion floors lifted (no black
-     smear), soil gains a coherent clod/grain/grit height field + close micro-normal,
-     roots/props/aerials carry more radial sides, prop basal lobes soften to grip flares.
-   · F-03 optics — `gloss` maps to LOW roughness (PBR carries the highlight); the
-     synthetic hot glint is demoted to a soft supplementary wax lobe.
-   · S-01 sparkle sources — wind unified: custom shadow-depth materials for wood,
-     foliage and blossoms run the SAME deform; leaf normals rotate with the blades;
-     the custom sun vector is used in view space (was world-vs-view mismatch under
-     orbit); mirrored negative-determinant sprig instances removed (gl_FrontFacing).
-   · Q-01 architecture — per-scaffold attach/elevation/length jitter, asymmetric
-     terminal forks, seeded dome undulation, pruning leaves snag stubs, per-instance
-     leaflet pose jitter (the six shared patterns no longer repeat verbatim), props lean.
-   · Q-02 mobile hero — portrait framing fits crown width (dominant frame) and fog
-     scales with fitted camera distance; the audited containment behaviour is untouched.
-  Still required for release sign-off (per audit): continuous fixed-camera captures on
-  physical target GPUs at wind 0/.35/1 — the sparkle gate needs real-GPU temporal proof.
-  v4.11 (2026-07-15) adds the ?shot= capture helper (landing-page asset harvest):
-   shot=png (same-tick toDataURL at shotDpr, auto after shotWait frames) · shot=webm
-   (canvas.captureStream + MediaRecorder, shotSec loop) · shot=key (press P = png now,
-   V = start/stop webm — for hand-composed close-ups and explore glides). Auto-names
-   downloads <species>-<seed>-<scene>-<season>-<label>. App layer only, zero rng draws,
-   zero effect when ?shot is absent; see tools/capture-landing.html + site/assets/SHOTLIST.md.
-  --- v4 (2026-07-10) fixed the v3 audit: F1 lamina grid, F2 camptodromous venation,
-  F3 mobile panel clip, F4 graded senescence, #3 bounded optics. ---
-  banyan-bonsai_v3.html — exploratory next-gen one-file prototype (2026-07-08, r2).
-  Thesis kept from the playbook: a tree is a pure function of (seed, spec).
-  Everything else is presentation. v3 rewrites the presentation layers for
-  realism: sprig-based foliage (no flat single cards), plate buttress roots,
-  species bark families, ground ecology, and wind. r2 re-audit pass: fluted/
-  ropey banyan wood, carved leaf silhouettes with vein relief + translucency,
-  notched cherry petals w/ stamen discs, sinewy roots, per-leaf inspection
-  data, and 3 new prop-driven scenes (forest floor / autumn park / zen garden).
-  Deterministic: one mulberry32 stream for placement, integer-hash noise for detail.
-  Deps: three@0.165.0 via CDN import map (same dependency policy as dist).
-  Handle: window.v3 (alias window.banyan). URL: ?species=&seed=&scene=&season=&quality=
-  &view=az,el,dist&wind=&ui=0&spec=<uri-encoded JSON deep-merged into spec>.
+  Banyan: a seeded procedural tree study with a pinned local Three.js dependency.
+  Build this readable source with npm run build to produce banyan_v5.html.
+  The public panel offers banyan; additional experiments and diagnostic cameras
+  are gated to local review mode. Geometry is certified at balanced quality.
 -->
 <style>
   html,body{margin:0;height:100%;background:#111;overflow:hidden}
@@ -118,7 +62,7 @@
     #hud{top:10px;left:10px;right:10px;font-size:11px;max-width:none}
     #hud .promise{display:none}
     #stats{display:none}
-    /* v4/F3: bounded mobile panel — minmax(0,1fr) columns + shrinkable controls
+    /* v4: bounded mobile panel — minmax(0,1fr) columns + shrinkable controls
        cannot exceed the container, and overflow-x:hidden guarantees no horizontal
        scroll or right-column clipping at 360/390/430-px widths. */
     #panel{top:auto;left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom));width:auto;
@@ -172,13 +116,13 @@
     const box=document.getElementById('boot-status'),msg=document.getElementById('boot-message'),retry=document.getElementById('boot-retry');
     window.__treeBootFail=()=>{if(!box)return;box.hidden=false;msg.textContent='The tree renderer stopped before its first frame. This is a loading or browser error, not a verdict on your hardware. Reload once; if it repeats, check the browser console.';retry.hidden=false};
     let watchdog=setTimeout(window.__treeBootFail,8000);window.__treeBootReady=()=>clearTimeout(watchdog);
-    // fix-40/F3 · while the programs compile off the main thread the 8 s budget does not apply; 60 s does
+    // while the programs compile off the main thread the 8 s budget does not apply; 60 s does
     window.__treeBootPending=()=>{clearTimeout(watchdog);watchdog=setTimeout(window.__treeBootFail,60000)};
     addEventListener('error',window.__treeBootFail);addEventListener('unhandledrejection',window.__treeBootFail);
     retry.addEventListener('click',()=>location.reload());
   })();
 </script>
-<!-- GENERATED by renderer/tools/build-v5-standalone.mjs from banyan_v5.source.html · sha256:d32c68e904b7dd3e381caf5701d9ca8d034b012617ad2ea636a602a34af0e6b3 -->
+<!-- GENERATED by tools/build-v5-standalone.mjs from banyan_v5.source.html · sha256:a40bd8d19edea0c7dc423476989776ef024017a86e909ba9ba0710f54d8ecb2d -->
 <script>
 "use strict";
 (()=>{/**
@@ -4037,10 +3981,10 @@ float gnoise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);
 float gfbm(vec2 p){float a=0.5,s=0.0;
   for(int i=0;i<5;i++){s+=a*gnoise(p);p=mat2(0.80902,0.58779,-0.58779,0.80902)*p*2.07+vec2(11.3,7.7);a*=0.5;}
   return clamp(s*1.03,0.0,1.0);}
-/* Footprint-limited twin \u2014 the v4.1/F-02 rule applied PER OCTAVE: an octave
+/* Footprint-limited twin \u2014 the v4.1 rule applied PER OCTAVE: an octave
    whose wavelength approaches the pixel footprint fades out instead of
    aliasing. Without it the (correctly) richer rotated field shimmers into
-   blocky mottle at the grazing angles a low memorial camera actually uses. */
+   blocky mottle at the grazing angles a low landscape camera actually uses. */
 float gfbmB(vec2 p){float w=fwidth(p.x)+fwidth(p.y);float a=0.5,s=0.0,f=1.0;
   for(int i=0;i<5;i++){
     s+=a*gnoise(p)*(1.0-smoothstep(0.22,0.60,f*w));
@@ -4100,7 +4044,7 @@ void main(){
   float h=0.80-g1*0.50-g2*0.18*(0.4+0.6*plate)-g3*0.035;
   /* flake shelves: a broken horizontal break that lifts one edge.
 
-     SECTION B FINDING 5 \xB7 THIS WAS THE RECTANGULAR MARK. Three octaves off a
+     THIS WAS THE RECTANGULAR MARK. Three octaves off a
      7x17 lattice, thresholded through a narrow 0.62-0.70 band, gives
      flat-topped plateaux whose OUTLINE is that coarse lattice - straight
      horizontal edges and square corners - and the +0.05 height step then
@@ -4119,7 +4063,7 @@ void main(){
   h+=shelf*0.05;
   h=clamp(h,0.0,1.0);
 
-  /* SECTION B FINDING 5 \xB7 THE FINE CHANNELS WERE ON AN AXIS-ALIGNED LATTICE.
+  /* THE FINE CHANNELS WERE ON AN AXIS-ALIGNED LATTICE.
      warp above is a 5x3 field. Across a 7 px pore cell it is essentially
      constant, so it TRANSLATES the fine lattices rather than deforming them,
      and grain, lichen crust and pores all kept their cell boundaries square to
@@ -4139,7 +4083,7 @@ void main(){
   // --- G \xB7 FINE GRAIN. 220 cycles per tile = 440 cycles/m at the finest.
   float grain=pn(uv+fw*0.008,vec2(90.0,44.0))*0.62+pn(uv+0.7+fw*0.004,vec2(190.0,95.0))*0.38;
 
-  // --- B \xB7 LICHEN (A13). Crustose lichen grows in irregular rosettes with a
+  // --- B \xB7 LICHEN. Crustose lichen grows in irregular rosettes with a
   //     denser rim; the mask carries the patch AND its rim so the shader can
   //     colour them differently.
   float lp=pfbm(uv+0.83,vec2(3.0,2.0),4);
@@ -4179,15 +4123,15 @@ ${Ys}
 ${Zn}
 ${Qv}`).replace("#include <begin_vertex>",`#include <begin_vertex>
 vWP=(modelMatrix*vec4(position,1.0)).xyz;
-/* fix-40/F1 \xB7 THE COLONISATION FIELDS ARE PER-VERTEX NOW. Lichen colonies,
+/* THE COLONISATION FIELDS ARE PER-VERTEX NOW. Lichen colonies,
    algal film, damp streaks, moisture and the warm mottle are 0.7-2.6 cycles
-   per metre by construction (fix-16/A13: LOW frequency so they survive to the
+   per metre by construction (LOW frequency so they survive to the
    arrival distance). A limb's rings sit centimetres apart, so evaluating them
    here and interpolating loses nothing a pixel can show, and it takes five
    4-octave fbms off every bark pixel: the slice measured that block at 2.45 ms
    of a 21 ms frame on the reference desktop. Smoothstepped BEFORE
    interpolation, so the thresholds keep their contrast between vertices.
-   fix-40 phone round: on WebGL2 the same five fields arrive BAKED as vertex
+   on WebGL2 the same five fields arrive BAKED as vertex
    attributes (ebBakeBarkFields \u2014 the same GLSL run once at build time), so the
    per-frame vertex stage no longer pays for them; the #else branch is the
    WebGL1 / ?barkbake=0 path and is the function the bake evaluates. */
@@ -4196,10 +4140,10 @@ vColony=vec4(aColony0,aColony1,aColony2,aColony3);vMott=aMott;
 #else
 vColony=ebColony(vWP);vMott=ebMott(vWP);
 #endif
-vTan=mat3(modelMatrix)*aTan.xyz;   // fix-16/A1 \xB7 the limb axis, in world space
-// fix-16/A12 \xB7 the atlas coordinate: whole tiles AROUND the limb (so uv.x
+vTan=mat3(modelMatrix)*aTan.xyz;   // the limb axis, in world space
+// the atlas coordinate: whole tiles AROUND the limb (so uv.x
 // wraps exactly at the seam) and metres ALONG it divided by the tile size.
-// fix-16/A12 \xB7 a per-BRANCH phase offset, so neighbouring limbs do not show
+// a per-BRANCH phase offset, so neighbouring limbs do not show
 // the same tile in register. aInfo.w is the branch's own phase, already here.
 vBarkUv=vec2(uv.x*aTan.w,uv.y*0.625)+vec2(fract(aInfo.w*0.37),fract(aInfo.w*0.71));
 vBUv=uv;vInfo=aInfo;
@@ -4209,12 +4153,12 @@ vBUv=uv;vInfo=aInfo;
   transformed.y-=abs(g)*aInfo.x*uWind*0.016;
 }`),s.fragmentShader=s.fragmentShader.replace("#include <common>",`#include <common>
 varying vec3 vWP;varying vec2 vBUv;varying vec4 vInfo;varying vec3 vTan;varying vec2 vBarkUv;
-varying vec4 vColony;varying float vMott;   // fix-40/F1 \xB7 lichen colony tint, alga, streak mask, moisture; warm mottle
+varying vec4 vColony;varying float vMott;   // lichen colony tint, alga, streak mask, moisture; warm mottle
 uniform sampler2D uBarkTex;uniform vec3 uSunV;uniform float uBump;uniform float uStria;uniform float uMottle;
 uniform vec3 uCrev;uniform vec3 uRidge;uniform vec3 uLentic;
 float gH;float gLent;
 float bFoot;float bNear;vec3 bTl;float bAlong;
-/* fix-16/A1 \xB7 gFine is the part of the height field that must NOT reach the
+/* gFine is the part of the height field that must NOT reach the
    normal. The normal is built from SCREEN-SPACE derivatives of the height, so
    a feature four pixels wide differentiates into a one-pixel signal and comes
    back as per-pixel speckle \u2014 the first two attempts at this section put fine
@@ -4223,13 +4167,13 @@ float bFoot;float bNear;vec3 bTl;float bAlong;
    differentiates it. Recorded because it is the whole reason the earlier
    "more detail" attempts looked worse than the smear they replaced. */
 float gFine;
-/* fix-16/A12 \xB7 the atlas's own height, hoisted out of barkH() so the albedo
+/* the atlas's own height, hoisted out of barkH() so the albedo
    pass can cut a groove where the relief has one. */
 float gBarkH;vec4 gBarkTex;
 ${Zn}
-/* fix-16/A1 \xB7 THE PIXEL FOOTPRINT, MEASURED ONCE AND MEASURED RIGHT.
+/* THE PIXEL FOOTPRINT, MEASURED ONCE AND MEASURED RIGHT.
 
-   v4.1/F-02 introduced the derivative band-limit \u2014 a procedural frequency
+   v4.1 introduced the derivative band-limit \u2014 a procedural frequency
    fades out once its wavelength nears the pixel footprint, because procedural
    GLSL has no mipmaps. The idea is correct. Two things about it were not:
 
@@ -4250,7 +4194,7 @@ ${Zn}
       same footprint, so detail appears when the bark is BIG ON SCREEN. */
 float bband(float f){return 1.0-smoothstep(0.24,0.48,f*bFoot);}
 float bbandUv(float f){return 1.0-smoothstep(0.24,0.48,f*fwidth(vBUv.y)*1.4);}
-/* fix-16/A1 \xB7 THE LIMB'S OWN FRAME.
+/* THE LIMB'S OWN FRAME.
 
    Every bark field was built in WORLD space with a hard-coded vertical squash
    (the rope network ran vec3(x*3.4, y*0.8, z*3.4) \u2014 a 4.25:1 stretch along
@@ -4264,13 +4208,13 @@ float bbandUv(float f){return 1.0-smoothstep(0.24,0.48,f*fwidth(vBUv.y)*1.4);}
    "ropes run along the limb" and "wrinkles run around it" are true wherever
    the limb points. Four derivatives and a normalize; no new noise. */
 vec3 limbQ(vec3 p,float s){return p+bTl*(dot(p,bTl)*(s-1.0));}
-/* fix-16/A1 \xB7 A BAND-LIMITED 3-D fbm, which the bark never had.
+/* A BAND-LIMITED 3-D fbm, which the bark never had.
 
    bfbm() is four octaves with no per-octave limit, so bfbm(p*16) carries
    content up to 128 cycles/m whatever the band limit applied to the RESULT
    says. That is where the salt-and-pepper in attempts one to three came from:
    the fissure layer was band-limited at its base frequency and its own top
-   octave aliased straight through. The ground field solved this in v4.1/F-02
+   octave aliased straight through. The ground field solved this in v4.1
    (gfbmB); the bark field never got the same treatment because until now it
    had no octave near the pixel footprint. Same cost class as bfbm. */
 float bfbmB(vec3 p,float f0){float a=0.5,s=0.0,f=f0;
@@ -4287,7 +4231,7 @@ float lentStrip(){
 }
 float barkH(){
   float bs=vInfo.y;
-  // fix-16/A1 \xB7 one footprint, measured once, shared by every band limit below.
+  // one footprint, measured once, shared by every band limit below.
   bFoot=length(fwidth(vWP));
   bNear=1.0-smoothstep(0.004,0.020,bFoot);           // detail appears when bark is BIG ON SCREEN
   {
@@ -4316,17 +4260,17 @@ float barkH(){
   float rope2=ridgeB(limbQ(vWP*7.2,0.236)+warp.yzx,7.2);
   float base=bfbmB(limbQ(vWP*2.0,1.9),3.8);
   float bandMask=smoothstep(0.28,0.68,bfbm(vWP*1.15+13.0));
-  // v4.1/F-02: wrinkle bands halved + warped harder \u2014 macro shots read them as flat
+  // v4.1: wrinkle bands halved + warped harder \u2014 macro shots read them as flat
   // horizontal banding; every fine signal below is band-limited by pixel footprint.
   float band=pow(sin(vBUv.y*34.0+base*13.0)*0.5+0.5,1.6)*bandMask*bbandUv(6.0);
 #else
-  float ropeS=0.5,rope2=0.5,base=0.5,band=0.0;   // fix-40 slice 1: macro fields off
+  float ropeS=0.5,rope2=0.5,base=0.5,band=0.0;   // macro fields off
 #endif
-  /* fix-16/A12 \xB7 ONE TEXTURE FETCH IS NOW THE WHOLE FINE BAND.
+  /* ONE TEXTURE FETCH IS NOW THE WHOLE FINE BAND.
 
-     What stood here was A1's fissure layer \u2014 two band-limited ridged fbms
+     What stood here was the earlier fissure layer \u2014 two band-limited ridged fbms
      (eight noise samples) plus lenticels, pustules and grain (three more) \u2014
-     and A1's own comment recorded the ceiling it was working against: the
+     and its own comment recorded the ceiling it was working against: the
      macro pose resolves 154 px/m, the derivative band limit correctly removes
      everything above ~25-40 cycles/m there, and a first attempt at real bark
      frequencies came back as salt-and-pepper because the renderer cannot
@@ -4338,12 +4282,12 @@ float barkH(){
      at the arrival frame, and never aliased at either.
 
      It is also CHEAPER \u2014 one fetch against eleven noise samples \u2014 which is why
-     the mobile path keeps it. A10's saving now comes from the leaf loop, the
+     the mobile path keeps it. The mobile saving now comes from the leaf loop, the
      derivative normals and MSAA, and NOT from making the bark bare, which is
      what made it read as cartoon in the owner's review.
 
      bNear does NOT gate any of this. Distance is the mipmap's job now, and
-     doing it twice was exactly the mistake A1 was fixing. */
+     doing it twice was exactly the mistake the earlier bark work was fixing. */
   vec4 bTex=texture2D(uBarkTex,vBarkUv);gBarkTex=bTex;
   float bH=bTex.r;gBarkH=bH;              // fissure + flake relief, 0..1
   float grainT=bTex.g-0.5;                // fine grain, signed
@@ -4383,7 +4327,7 @@ float barkH(){
      stay out of it. */
   gFine=(grainT*0.038-poreT*0.018)*bs;
   h+=gFine;
-  /* fix-16/A1 \xB7 PROP ROOTS GET THEIR OWN SURFACE (kind 2), not the trunk's
+  /* PROP ROOTS GET THEIR OWN SURFACE (kind 2), not the trunk's
      network shrunk. A banyan prop is a fused column: long parallel fibre
      bundles running its length, growth annulations ringing it, and far less of
      the trunk's anastomosing rope. Built entirely from fields already
@@ -4429,7 +4373,7 @@ float barkH(){
   float kindW=vInfo.z;
   float twigF=1.0-smoothstep(0.06,0.4,bs);
 #if (SLICE & 2)==0
-  if(dAtt>0.02){   // fix-40/F1 \xB7 same footprint branch as the albedo block below
+  if(dAtt>0.02){   // same footprint branch as the albedo block below
   float striT=bfbm(vec3(vBUv.x*7.0,vWP.y*2.0,vBUv.y*14.0));
   float rootK=step(1.5,kindW)*step(kindW,4.5);
   float fib=1.0-abs(bnoise(vec3(vBUv.x*9.0,vBUv.y*1.6,7.7))*2.0-1.0);
@@ -4454,13 +4398,13 @@ float lenticels(){
   float bs=vInfo.y;
   float moist=1.0-smoothstep(0.02,0.4,vWP.y);
   vec3 bark=mix(uCrev*0.70,uRidge*1.12,smoothstep(0.18,0.84,gH));   // V1: wider crevice/ridge albedo separation
-  bark*=mix(0.68,1.06,smoothstep(0.06,0.85,gH));                    // v4.1/F-02: occlusion floor lifted \u2014 no black smear at macro
+  bark*=mix(0.68,1.06,smoothstep(0.06,0.85,gH));                    // v4.1: occlusion floor lifted \u2014 no black smear at macro
 #if BARKF==0
   bark*=0.86+0.14*smoothstep(0.06,0.58,gH);                       // crevice occlusion between ropes (tempered)
 #if (SLICE & 4)==0
-  bark=mix(bark,bark*vec3(1.09,1.04,0.94),vMott*0.4);           // warm tan patches (v4.1: tempered) \u2014 fix-40/F1: per-vertex field
+  bark=mix(bark,bark*vec3(1.09,1.04,0.94),vMott*0.4);           // warm tan patches (v4.1: tempered) \u2014 per-vertex field
 #endif
-  /* ================= fix-16/A13 \xB7 COLONISATION =================
+  /* ================= COLONISATION =================
 
      After fissure, the most obvious thing in every photograph on the owner's
      reference strip is that real bark is COLONISED. V5 had one faint algal
@@ -4499,7 +4443,7 @@ float lenticels(){
     float crust=lich*(0.35+0.75*shade)*smoothstep(0.12,0.5,bs);
     crust=clamp(crust,0.0,1.0);
     vec3 lichenC=vec3(0.60,0.62,0.53)*(0.84+0.30*gBarkTex.g);
-    // colonies differ: some grey-white, some distinctly green (fix-40/F1: the field is per-vertex, vColony.x)
+    // colonies differ: some grey-white, some distinctly green (the field is per-vertex, vColony.x)
     lichenC=mix(lichenC,lichenC*vec3(0.84,1.02,0.74),vColony.x);
     bark=mix(bark,lichenC,crust*0.34);
     bark=mix(bark,lichenC*vec3(0.88,0.94,0.82),crust*crust*0.16);   // denser rim reads greener
@@ -4520,7 +4464,7 @@ float lenticels(){
   float scar=smoothstep(0.86,0.95,bnoise(vWP*vec3(3.0,9.0,3.0)+4.0));
   bark*=1.0-scar*0.22;
 #endif
-  /* fix-16/A12 \xB7 a deep groove is a CUT: it is occluded as well as darker, and
+  /* a deep groove is a CUT: it is occluded as well as darker, and
      the ridge shoulder beside it catches the light. The albedo ramp alone is
      too gentle to read as either. */
   float groove=pow(clamp((0.52-gBarkH)/0.52,0.0,1.0),1.4);
@@ -4549,7 +4493,7 @@ float lenticels(){
   bark=mix(bark,uLentic,smoothstep(0.7,0.82,dash)*(1.0-smoothstep(0.84,0.94,dash))*0.75);
 #endif
   bark*=1.0-0.22*moist;
-  /* fix-16/A2 \xB7 THE WOOD SIDE OF THE CONTACT.
+  /* THE WOOD SIDE OF THE CONTACT.
      The ground was already darkened where roots press it; the wood was not,
      so a prop root met a shadowed patch of soil with a fully lit foot and read
      as pasted on. Two terms, no new noise: ambient occlusion in the crook, and
@@ -4565,10 +4509,10 @@ float lenticels(){
   float young=step(0.5,kindW)*step(kindW,1.5)+step(5.5,kindW);
   bark=mix(bark,bark*vec3(0.85,1.02,0.8),young*(1.0-smoothstep(0.03,0.22,bs)));
   // twig bark: soft irregular tone patches (no regular ribs) + sparse bud-scale scars
-  float dAtt2=bNear;   // fix-16/A1 \xB7 footprint, not camera distance (see bband)
+  float dAtt2=bNear;   // footprint, not camera distance (see bband)
   float twigF=1.0-smoothstep(0.06,0.4,bs);
 #if (SLICE & 2)==0
-  /* fix-40/F1 \xB7 a real branch: these terms were already multiplied by the
+  /* a real branch: these terms were already multiplied by the
      footprint factor, which the GPU cannot skip. Below 2 % they moved a 16 %
      modulation by under 0.3 % \u2014 nothing a pixel shows \u2014 and at the arrival
      distance that is the whole trunk. */
@@ -4602,7 +4546,7 @@ roughnessFactor=clamp(roughnessFactor,0.34,1.0);`).replace("#include <normal_fra
   vec3 sx=dFdx(sp),sy=dFdy(sp);
   vec3 r1=cross(sy,normal),r2=cross(normal,sx);
   float det=dot(sx,r1);
-  float rh=gH-gFine;   // fix-16/A1 \xB7 relief only; fine grain shades, it does not bump
+  float rh=gH-gFine;   // relief only; fine grain shades, it does not bump
 #if BARKF==1
   rh+=crackMask()*0.7*vInfo.y;
 #endif
@@ -4614,14 +4558,14 @@ roughnessFactor=clamp(roughnessFactor,0.34,1.0);`).replace("#include <normal_fra
   normal=normal;
 #else
   vec3 grad=sign(det)*(dFdx(rh)*r1+dFdy(rh)*r2);
-  normal=normalize(abs(det)*normal-uBump*0.16*mix(0.25,1.0,vInfo.y)*grad);   // V1: ~3.5x; fix-16/A12: the atlas relief is prefiltered, so it can be differentiated safely
+  normal=normalize(abs(det)*normal-uBump*0.16*mix(0.25,1.0,vInfo.y)*grad);   // V1: ~3.5x; the atlas relief is prefiltered, so it can be differentiated safely
 #endif
 }`),n.userData.shader=s},n}function Vu(i,e,t){let n=i.foliage.fx||{},s=new mt({color:16777215,roughness:Be(1.05-.75*(n.gloss??.5),.3,.9),metalness:0,side:Dt});return(n.serr||[0,0])[0]>0&&!xr&&(s.alphaToCoverage=!0),s.onBeforeCompile=r=>{r.defines={...r.defines||{},MOB:xr?"1":"0",SLICE:String(Zu)},Object.assign(r.uniforms,{uT:e.uT,uWind:e.uWind,uWDir:e.uWDir,uCanC:t.uCanC,uSunV:t.uSunV,uSunC:t.uSunC,uEnvI:t.uEnvI,uSerr:{value:new Le(...n.serr||[0,0])},uVein:{value:new z(n.veinN??7,n.veinCurve??.3,n.veinTint??.45)},uUnderL:{value:n.underL??1.1},uNeedle:{value:i.foliage.blade.outline==="needle"?1:0}}),r.vertexShader=r.vertexShader.replace("#include <common>",`#include <common>
 attribute vec3 aPO;attribute vec3 aAx;attribute float aLf;attribute vec4 aWind;attribute float aSen;
 varying vec2 vLUv;varying float vLf;varying float vSen;
 uniform float uT;uniform float uWind;uniform vec3 uWDir;uniform vec3 uCanC;
 ${Ys}${Ou}`).replace("#include <beginnormal_vertex>",`#include <beginnormal_vertex>
-// v4.1/S-01: the wind pose is computed ONCE here and applied to normals AND positions
+// v4.1: the wind pose is computed ONCE here and applied to normals AND positions
 // (and mirrored into the custom shadow-depth material), so lighting, silhouette and cast
 // shadows agree under wind. wIj adds per-instance leaflet pose decorrelation (Q-01: the
 // six shared leaflet patterns no longer repeat verbatim across 2,300 sprigs).
@@ -4630,7 +4574,7 @@ float wTw=(fract(aWind.z*7.13+aLf*0.618)-0.5)*0.6;
 float wIj=(fract(aWind.z*23.7+max(aLf,0.0)*3.1)-0.5)*step(-0.5,aLf);
 float wFl=uWind*(0.05+0.11*uv.x)*sin(uT*wFf*(0.35+0.6*uWind)+aLf*1.9+wPh);   // stature: calm at low wind, lively at full
 float wAng=wTw*0.5+wIj*0.38+wFl;
-// fix-16/A4 \xB7 swing about the rachis FIRST, and carry aAx with it, so the wind
+// swing about the rachis FIRST, and carry aAx with it, so the wind
 // roll still turns the blade about its own length after it has been moved.
 float sA=lfSwing(aWind,aLf),sC=cos(sA),sS=sin(sA);
 vec3 wAx=normalize(lfSwingRot(aAx,sC,sS));
@@ -4675,7 +4619,7 @@ ${Zn}`).replace("#include <color_fragment>",`#include <color_fragment>
   if(vLUv.y>1.5){
     diffuseColor.rgb=mix(diffuseColor.rgb*0.55,vec3(0.3,0.25,0.14),0.6); // rachis
   }else{
-    // v4.1/F-01: the silhouette IS the mesh outline now (species tip + margin live in
+    // v4.1: the silhouette IS the mesh outline now (species tip + margin live in
     // geometry) \u2014 no noise nibble, no binary tip cut, and for entire-margined species
     // (banyan) no discard at all. Serrated species modulate MSAA coverage with a
     // derivative-smoothed profile (alphaToCoverage) instead of a hard cut.
@@ -4699,13 +4643,13 @@ ${Zn}`).replace("#include <color_fragment>",`#include <color_fragment>
       diffuseColor.rgb=c;
     }else{
     float dAttL2=clamp(1.7/(1.0+length(vViewPosition)*2.1),0.0,1.0); // vein detail dies out by ~1.5m
-    // v4.1/F-03: screen-footprint band limits \u2014 any signal whose wavelength nears the
+    // v4.1: screen-footprint band limits \u2014 any signal whose wavelength nears the
     // pixel footprint fades out instead of aliasing into salt-and-pepper speckle.
     float fpU=fwidth(u)+1e-6;
     float bl20=1.0-smoothstep(0.20,0.5,fpU*20.0);
     float bl44=1.0-smoothstep(0.20,0.5,fpU*44.0);
     float aaV=fwidth(v)*1.2;
-    // === v4/F2: camptodromous banyan venation \u2014 a hierarchy, not periodic bands ===
+    // === v4: camptodromous banyan venation \u2014 a hierarchy, not periodic bands ===
     // midrib: tapering, with a gentle S-drift so it is not a ruler line
     float vv=v-(bnoise(vec3(u*2.3,vLf*3.7,9.1))-0.5)*0.06*u;
     float avv=abs(vv);
@@ -4717,16 +4661,16 @@ ${Zn}`).replace("#include <color_fragment>",`#include <color_fragment>
     // secondaries: DISCRETE veins leaving the midrib at irregular points, each arcing
     // toward the apex with its own curvature, then looping to run along the margin.
 #if MOB==1 || (SLICE & 32)!=0
-    /* fix-16/A10 \xB7 THE SIXTEEN-ITERATION LOOP. The phone report named this as
+    /* THE SIXTEEN-ITERATION LOOP. The phone report named this as
        the other fragment loop in the build, and it runs on every leaf pixel of
        a 2 100-sprig canopy that fills the frame. A banyan leaf's venation is
-       not resolvable on a 390 px-wide phone at any distance the product uses,
+       not resolvable on a 390 px-wide phone at any distance the default camera uses,
        so the whole hierarchy is replaced by the midrib alone. */
     float lat=0.0,nearU=1.0;
 #else
     float latRelief=0.0;                                           // nearest-vein response
     float nearU=1.0;                                               // u-distance to nearest vein
-    /* fix-40/F1 \xB7 THE LOOP ONLY WHERE A VEIN CAN BE SEEN. fpU is the pixel
+    /* THE LOOP ONLY WHERE A VEIN CAN BE SEEN. fpU is the pixel
        footprint along the blade (1/leaf length in px). Past ~0.05 (a leaf
        under 20 px long) every secondary is already widened to the footprint
        and clamped to 35 % strength, so the loop's output is a broad tint, not
@@ -4767,9 +4711,9 @@ ${Zn}`).replace("#include <color_fragment>",`#include <color_fragment>
     lVein=clamp(mid+lat*0.72,0.0,1.0);
     lDome=smoothstep(0.02,0.16,nearU)*smoothstep(0.05,0.18,avv)*(1.0-mid)*dAttL2*denseK*0.7; // intercostal lift
     // reticulation: soft cellular net between secondaries \u2014 band-limited so it can
-    // never resolve into salt-and-pepper (v4.1/F-03)
+    // never resolve into salt-and-pepper (v4.1)
 #if (SLICE & 64)==0
-    /* fix-40/F1 \xB7 both terms are multiplied by bl20, which is exactly zero
+    /* both terms are multiplied by bl20, which is exactly zero
        once the footprint passes half a cycle at 20 cycles per blade \u2014 every
        leaf at the arrival distance. A branch makes that zero free: 2.45 ms of
        the desktop frame, byte-identical output wherever bl20 was already 0. */
@@ -4785,7 +4729,7 @@ ${Zn}`).replace("#include <color_fragment>",`#include <color_fragment>
     lH=mid*0.55+lat*0.24+lDome*0.10+ret*0.05+tert*0.10;
     lRim=1.0-smoothstep(0.0,0.05,rimD);
     vec3 c=diffuseColor.rgb;
-    // fix-16/A4 \xB7 per-LEAFLET spread, on top of the per-instance spread above:
+    // per-LEAFLET spread, on top of the per-instance spread above:
     // six blades on one sprig used to differ by 8% in value and nothing in hue,
     // which is what makes a sprig read as one flat rosette.
     c*=0.86+0.28*lfH;
@@ -4805,7 +4749,7 @@ ${Zn}`).replace("#include <color_fragment>",`#include <color_fragment>
     c=mix(c,c*vec3(0.82,0.86,0.72),lRim*0.3);                        // darker thickened margin bead
     c*=1.0-0.15*(1.0-smoothstep(0.0,0.09,rimD));                     // dry margin line (soft)
     c=mix(c,c*vec3(1.07,1.02,0.86),smoothstep(0.62,1.0,u)*0.25);     // warm tip
-    // v4/F4: intra-leaf senescence \u2014 yellowing/browning advances from the margin and tip
+    // v4: intra-leaf senescence \u2014 yellowing/browning advances from the margin and tip
     // inward with an irregular front; veins hold green longest (green islands). vSen (per
     // instance) sets how far the front has advanced on THIS leaf, so neighbours in a cluster
     // differ in overall tint AND internal pattern instead of one flat mustard.
@@ -4828,7 +4772,7 @@ ${Zn}`).replace("#include <color_fragment>",`#include <color_fragment>
 }`).replace("#include <roughnessmap_fragment>",`#include <roughnessmap_fragment>
 if(vLUv.y<1.5){
 #if (SLICE & 64)==0
-  // fix-40/F1 \xB7 the roughness grain is 9x7 cycles per blade: sub-pixel on any leaf under ~40 px, where it only averaged to zero
+  // the roughness grain is 9x7 cycles per blade: sub-pixel on any leaf under ~40 px, where it only averaged to zero
   float rgh=0.0;
   if(fwidth(vLUv.x)<0.025)rgh=(bfbm(vec3(vLUv.x*9.0,vLUv.y*7.0,vLf))-0.5)*0.05;
   roughnessFactor=clamp(roughnessFactor+lVein*0.10-lDome*0.06+rgh,0.22,0.85);
@@ -4841,7 +4785,7 @@ if(!gl_FrontFacing)roughnessFactor=min(1.0,roughnessFactor+0.42);
 #if (SLICE & 128)==0
 if(vLUv.y<1.5){
   float dAttL=1.0/(1.0+length(vViewPosition)*0.8);
-  // fix-40/F1 \xB7 the relief is scaled by dAttL, 0.06 at the arrival distance: four derivatives and a normalize for a perturbation no pixel shows. Kept inside ~9 m (the dive).
+  // the relief is scaled by dAttL, 0.06 at the arrival distance: four derivatives and a normalize for a perturbation no pixel shows. Kept inside ~9 m (the dive).
   if(dAttL>0.12){
   vec3 sp=-vViewPosition;
   vec3 sx=dFdx(sp),sy=dFdy(sp);
@@ -4855,7 +4799,7 @@ if(vLUv.y<1.5){
 #if (SLICE & 256)==0
 {
   if(vLUv.y<1.5){
-    // v4.1/S-01: the custom sun response now works in ONE space \u2014 uSunV (world light-
+    // v4.1: the custom sun response now works in ONE space \u2014 uSunV (world light-
     // travel direction) is taken into view space here, matching the view-space normal,
     // so orbiting the camera no longer swims the translucency/sheen against the lights.
     vec3 sunV=normalize((viewMatrix*vec4(uSunV,0.0)).xyz);
@@ -4866,7 +4810,7 @@ if(vLUv.y<1.5){
     float thick=(1.0-lVein*0.55)*(1.0-vSen*0.30);
     // V2+V3: translucency/fill/rim summed then capped (no paper-white leaves);
     // the flat fill now tracks scene light via uEnvI (no self-lit dusk canopy)
-    /* fix-16/A4 \xB7 TRANSMITTED LIGHT IS NOT REFLECTED LIGHT. The old term
+    /* TRANSMITTED LIGHT IS NOT REFLECTED LIGHT. The old term
        multiplied the leaf's own reflected colour by a white-ish sun, so a
        backlit blade got brighter but stayed the same green \u2014 which is why the
        canopy read as opaque cards from underneath. Chlorophyll absorbs red and
@@ -4876,7 +4820,7 @@ if(vLUv.y<1.5){
     vec3 transC=vec3(1.22,1.08,0.42);
     vec3 addK=uSunC*(pow(backlit,1.5)*thick*1.22*transC+rim*0.3*backlit)+vec3((0.14+rim*0.08)*uEnvI);
     reflectedLight.indirectDiffuse+=diffuseColor.rgb*min(addK,vec3(1.05,1.0,0.8));
-    // v4.1/F-03: one coherent cuticle \u2014 the PBR response (gloss\u2192roughness) carries the
+    // v4.1: one coherent cuticle \u2014 the PBR response (gloss\u2192roughness) carries the
     // highlight; this is only a soft supplementary wax lobe, no isolated hot glint.
     vec3 Hn=normalize(-sunV+normalize(vViewPosition));
     float ndh=clamp(dot(normal,Hn),0.0,1.0);
@@ -4943,7 +4887,7 @@ ${Zn}`).replace("#include <color_fragment>",`#include <color_fragment>
   }
 }`).replace("#include <lights_fragment_end>",`#include <lights_fragment_end>
 {
-  vec3 sunV=normalize((viewMatrix*vec4(uSunV,0.0)).xyz);   // v4.1/S-01: same space as the shading normal
+  vec3 sunV=normalize((viewMatrix*vec4(uSunV,0.0)).xyz);   // v4.1: same space as the shading normal
   float backlit=clamp(dot(normal,sunV),0.0,1.0);
   float rim=pow(1.0-abs(dot(normal,normalize(vViewPosition))),1.8);
   vec3 addK=uSunC*(pow(backlit,1.2)*0.85+rim*0.3)+vec3(0.17*uEnvI);   // V3: petal fill tracks scene light
@@ -4969,7 +4913,7 @@ ${n[0]>0?"vDUv=uv;vDLf=aLf;":""}
   float wIj=(fract(aWind.z*23.7+max(aLf,0.0)*3.1)-0.5)*step(-0.5,aLf);
   float wFl=uWind*(0.05+0.11*uv.x)*sin(uT*wFf*(0.35+0.6*uWind)+aLf*1.9+wPh);
   float wAng=wTw*0.5+wIj*0.38+wFl;
-  float sA=lfSwing(aWind,aLf),sC=cos(sA),sS=sin(sA);   // fix-16/A4, same swing as the visible blade
+  float sA=lfSwing(aWind,aLf),sC=cos(sA),sS=sin(sA);   // , same swing as the visible blade
   vec3 wAx=normalize(lfSwingRot(aAx,sC,sS));
   float wCa=cos(wAng),wSa=sin(wAng);
   vec3 P=lfSwingRot(transformed-aPO,sC,sS);
@@ -5028,7 +4972,7 @@ uniform vec3 uHor;uniform vec2 uHorF;uniform float uHorC;uniform vec3 uSoilA;uni
 uniform float uMossA;uniform float uGravelA;
 /* Section B review 1 (2026-07-26) quality concern: under a grazing sun (Blue
    Dusk) the soil's albedo modulation and derivative relief over-contrast into
-   the periodic streak field 3-4 I-P34-003 describes \u2014 the same relief that
+   the periodic streak field describes \u2014 the same relief that
    gives daylight soil its tooth. uRelief is derived from the SCENE'S OWN sun
    elevation (1.0 for a high sun, easing toward 0.45 as the sun grazes), so
    noon keeps every bit of its texture and only low light calms down. A pure
@@ -5040,15 +4984,15 @@ ${S?Zv:""}
 ${S?`#define SFBM(p) gfbmB((p).xz)
 #define SNOISE(p) gnoise((p).xz)`:`#define SFBM(p) bfbm(p)
 #define SNOISE(p) bnoise(p)`}
-float gband(float f){float w=fwidth(vGP.x)+fwidth(vGP.z);return 1.0-smoothstep(0.20,0.55,f*w);}   // v4.1/F-02: soil detail is footprint-limited`).replace("#include <map_fragment>",`#include <map_fragment>
+float gband(float f){float w=fwidth(vGP.x)+fwidth(vGP.z);return 1.0-smoothstep(0.20,0.55,f*w);}   // v4.1: soil detail is footprint-limited`).replace("#include <map_fragment>",`#include <map_fragment>
 {
   float r=length(vGP.xz);
   vec3 soil=mix(uSoilA,uSoilB,smoothstep(0.35,0.7,SFBM(vGP*vec3(2.2,4.0,2.2))));
-  // v4.1/F-02: coherent clod/grain/grit height field (each octave footprint-limited);
+  // v4.1: coherent clod/grain/grit height field (each octave footprint-limited);
   // it tints the albedo here and drives a close-range micro-normal below, so the soil
   // has physical tooth at inspection distance instead of flat colour + pixel noise.
   float clod=SFBM(vGP*vec3(3.0,5.0,3.0)+3.7);
-  /* fix-40/F1 \xB7 the band limit is exactly zero past half a cycle per footprint;
+  /* the band limit is exactly zero past half a cycle per footprint;
      a branch makes that zero free instead of a multiply. Exact where it was 0. */
   float gb18=gband(18.0),gb60=gband(60.0);
   float grain=0.0,grit=0.0;
@@ -5057,7 +5001,7 @@ float gband(float f){float w=fwidth(vGP.x)+fwidth(vGP.z);return 1.0-smoothstep(0
   gSoilH=clod*0.55+grain*0.30+grit*0.15;
   soil*=0.84+(0.16*clod+0.12*grain+0.08*grit)*uRelief;   // Section B review 1: low sun sees a calmer modulation
   float rlf=mix(0.55,1.0,uRelief);
-${S?`  // I-P34-003 \xB7 broken clod structure: a second, much larger warped field
+${S?`  // broken clod structure: a second, much larger warped field
   // pulls the topsoil into patches of tone so the near ground has ECOLOGY
   // (worked earth, leaf-mould, bare mineral) instead of one repeating grade.
   float clodPatch=${T?"gfbm(vGP.xz*0.42+61.0)":"gwarp(vGP.xz*0.42+61.0,0.9)"};   // "patch" is a GLSL ES reserved word
@@ -5068,13 +5012,13 @@ ${S?`  // I-P34-003 \xB7 broken clod structure: a second, much larger warped fie
 ${S?`  // Earth & Moss: the banyan's shade builds a HUMUS APRON to the
   // dripline \u2014 dark organic topsoil, ragged-edged by growth noise, that
   // the compressed root field sits inside (a shade tree kills its lawn).
-  // fix-16/A2 \xB7 the apron edge is now ragged at METRE scale as well as at the
+  // the apron edge is now ragged at METRE scale as well as at the
   // fine scale that vanishes by twelve metres, so the arrival frame sees a
   // shade line rather than a disc.
   float humus=(1.0-smoothstep(3.2,8.6,r+(SFBM(vGP*vec3(0.9,1.4,0.9)+53.0)-0.5)*2.6
     +(clodPatch-0.5)*2.4))*0.46;
   moist=max(moist,humus);
-  // fix-16/A2 \xB7 the apron was one flat 0.5-strength wash of the darkest soil
+  // the apron was one flat 0.5-strength wash of the darkest soil
   // colour over eight metres, which is most of the arrival frame's ground and
   // most of why it carried nothing. Same apron, broken by the metre-scale patch
   // field, so it reads as leaf-mould rather than as a painted disc.
@@ -5083,7 +5027,7 @@ ${S?`  // Earth & Moss: the banyan's shade builds a HUMUS APRON to the
 ${S?`  // Earth & Moss: restrained mineral specks only \u2014 the broad organic
   // reading of the near field comes from the widened humus band below.
   float gb30=gband(30.0),speck=0.0;
-  if(gb30>0.0)speck=smoothstep(0.85,0.95,SNOISE(vGP*vec3(14.0,30.0,14.0)))*gb30*uEco;   // fix-40/F1 \xB7 exact where the band limit is 0
+  if(gb30>0.0)speck=smoothstep(0.85,0.95,SNOISE(vGP*vec3(14.0,30.0,14.0)))*gb30*uEco;   // exact where the band limit is 0
   ${c?"speck*=1.0-smoothstep(0.06,0.4,vPath);":""}
   soil=mix(soil,uSoilB*1.15,speck*0.2*smoothstep(0.6,2.2,r));`:`  float speck=smoothstep(0.78,0.92,SNOISE(vGP*vec3(14.0,30.0,14.0)))*gband(30.0)*uEco;
   soil=mix(soil,uSoilB*1.25,speck*0.5*smoothstep(0.6,2.2,r));`}
@@ -5106,10 +5050,10 @@ ${S?`  // Phase 3 \xB7 Earth & Moss: moss seeks the HUMID PLACES \u2014 the mois
   moss*=0.72+0.28*SNOISE(vGP*vec3(9.0,5.0,9.0));
   ${c?"moss*=1.0-smoothstep(0.06,0.45,vPath);   // nothing soft survives the treading":""}
   float gb22=gband(22.0),mossG=0.0;
-  if(gb22>0.0)mossG=SNOISE(vGP*22.0)*gb22;   // fix-40/F1 \xB7 exact where the band limit is 0
+  if(gb22>0.0)mossG=SNOISE(vGP*22.0)*gb22;   // exact where the band limit is 0
   vec3 mossC=(vec3(0.10,0.22,0.07)+vec3(0.10,0.15,0.06)*smoothstep(0.35,0.85,mossN))*(0.8+0.45*mossG);
   soil=mix(soil,mossC,clamp(moss,0.0,1.0)*0.92);
-${S?`  /* fix-16/A2 \xB7 THE ARRIVAL FRAME'S BIGGEST SURFACE.
+${S?`  /* THE ARRIVAL FRAME'S BIGGEST SURFACE.
 
      Measured on the shipped build: the ground band below the horizon carried
      detail on 25% of its pixels at golden hour and 11% at dusk, and what it
@@ -5120,14 +5064,14 @@ ${S?`  /* fix-16/A2 \xB7 THE ARRIVAL FRAME'S BIGGEST SURFACE.
 
      So the two fields below are LOW frequency by construction: metre-scale
      patches reusing clodPatch, which is already computed, and one new 17 m
-     drift. Neither can be band-limited away at any distance the product uses,
+     drift. Neither can be band-limited away at any distance the default camera uses,
      and together they cost five noise samples.  */
   float farDrift=gfbm(vGP.xz*0.06-19.0);
   soil*=0.84+0.32*clodPatch;
   soil=mix(soil,soil*vec3(1.18,1.08,0.88),smoothstep(0.48,0.92,farDrift)*0.55);
   soil=mix(soil,soil*vec3(0.80,0.86,0.82),smoothstep(0.46,0.06,farDrift)*0.45);
 
-  /* fix-16/A2 \xB7 SOIL THAT RESPONDS TO THE ROOT FIELD.
+  /* SOIL THAT RESPONDS TO THE ROOT FIELD.
      vCon is the tight woody-contact field. Beside a root the earth is heaved
      and broken, not merely darker; the heave enters gSoilH so it lights, and
      the crook of the junction takes a real contact occlusion. This is the
@@ -5152,7 +5096,7 @@ ${l==="wild-meadow"?`  // Wild Meadow (cultivated): a fresher green wash between
   ${c?"thatch*=1.0-smoothstep(0.08,0.5,vPath);":""}
   vec3 thatchC=vec3(0.30,0.315,0.15)*(0.82+0.42*SNOISE(vGP*vec3(6.0,14.0,6.0)));
   soil=mix(soil,thatchC,thatch*0.42);`:""}
-${l==="stone-grove"?`  // \xA77C.7 \xB7 Stone & Gravel Grove: a pale, dry, raked gravel bed with a faint
+${l==="stone-grove"?`  // Stone & Gravel Grove: a pale, dry, raked gravel bed with a faint
   // cool cast \u2014 clearly tended and contemplative, never neglected.
   float grN=SFBM(vGP*vec3(2.2,3.0,2.2)+91.0);
   float grv2=smoothstep(0.30,0.60,grN)*(1.0-smoothstep(13.5,17.5,r));
@@ -5174,7 +5118,7 @@ ${c?`  // the earthen approach: compacted, dust-dry trodden soil \u2014 never pa
   vec3 grav=vec3(0.79,0.77,0.72)*(0.88+0.2*bnoise(vGP*70.0)*gband(70.0))*(0.95+0.07*rake);
   grav*=1.0-0.2*smoothstep(0.5,0.95,rake);
   soil=mix(soil,grav,gw);
-${S?`  // I-P34-003 \xB7 MOISTURE POCKETS. vWet is the same per-vertex field that
+${S?`  // MOISTURE POCKETS. vWet is the same per-vertex field that
   // dished the mesh, so the damp patch and the hollow are the same place: a
   // darker, cooler, more saturated topsoil with a fine algal green in the
   // wettest centre, ragged-edged by the warped field rather than a disc.
@@ -5190,7 +5134,7 @@ roughnessFactor=clamp(roughnessFactor-0.15*(1.0-smoothstep(0.15,1.2,length(vGP.x
 ${S?"roughnessFactor=mix(roughnessFactor,0.42,clamp(vWet,0.0,1.0)*0.8);   // damp soil holds a sheen dry soil never has":""}
 ${c?"roughnessFactor=mix(roughnessFactor,0.74,smoothstep(0.15,0.85,vPath));   // trodden earth packs smoother":""}`).replace("#include <normal_fragment_maps>",T?"#include <normal_fragment_maps>":`#include <normal_fragment_maps>
 {
-  // v4.1/F-02: soil micro-normal \u2014 same derivative-relief treatment as the bark, so
+  // v4.1: soil micro-normal \u2014 same derivative-relief treatment as the bark, so
   // root/soil junctions meet two textured surfaces instead of wood-on-billiard-felt.
   vec3 sp=-vViewPosition;
   vec3 sx=dFdx(sp),sy=dFdy(sp);
@@ -5248,7 +5192,7 @@ attribute float aPh;attribute float aTint;varying float vTint;
 varying vec2 vFlUv;
 uniform float uT;uniform float uWind;uniform vec3 uWDir;`).replace("#include <begin_vertex>",`#include <begin_vertex>
 vTint=aTint;
-// 3-4 I-P34-005 / 5-6 F1 / 7C F3 \u2014 the head/stem cut is read from the
+// / the head/stem cut is read from the
 // geometry's own uv.y, which the FRAGMENT stage cannot see: a
 // MeshStandardMaterial with no map never defines USE_UV, so three declares
 // no vUv and the injected 'if(vUv.y<0.7)' failed to compile and killed the

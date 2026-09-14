@@ -7,66 +7,10 @@
 <title>Living Trees V5 — procedural tree studies</title>
 <meta name="description" content="Living procedural tree studies, regenerated exactly from their seed.">
 <!--
-  V5 launch candidate · 2026-07-17
-  V4 remains untouched. V5 exposes only three selected tree studies; seven rejected
-  experiments remain available to the local review harness, not the public selector. A
-  V5.3 realism pass replaces Banyan's radial apex whorl with staggered load paths and a
-  terminal-covered inner roof, restores full-scale Cherry bloom, and lowers Magnolia's
-  evergreen skirt. Seed 863 is the pixel-vetted Banyan default from a 1,000-seed sweep.
-  reproducible standalone build. This readable source uses the pinned local Three.js module; run
-  tools/build-v5-standalone.mjs to produce the double-clickable offline V5 artifact.
-  explicit startup failure UX, semantic controls, and share/reset actions. The
-  review-only cameras, scenes, and diagnostics remain gated to local review mode;
-  V5 does not claim photorealistic or species-exact simulation.
-
-  banyan-bonsai_v4.html — v4.1 · 2026-07-12 release-audit remediation pass.
-  v4.1 executes the "Product Release Visual Audit — Banyan Tree v4" (NO-GO) fix list:
-   · F-01 leaf proportions — `widthRatio` is now an explicit FULL width:length contract
-     (half-width = 0.5·length·ratio; the audited build used the full product as a
-     half-width → blades ~1.32× wider than long). Species tip moved into geometry;
-     hi-quality lamina grid floors at 8×4 (was 5×2); a build-time self-test warns on
-     contract drift.
-   · F-01/F-03 margins — noisy binary fragment `discard` removed: the silhouette IS the
-     mesh outline. Serrated species use fwidth-smoothed coverage + alpha-to-coverage.
-     Venation/reticulation are band-limited by pixel footprint (no salt-and-pepper),
-     vein line widths floor at the footprint and fade instead of crawling.
-   · F-02 bark/root/soil — derivative band-limiting (bband) on all fine bark/ground
-     frequencies, wrinkle banding halved + warped, occlusion floors lifted (no black
-     smear), soil gains a coherent clod/grain/grit height field + close micro-normal,
-     roots/props/aerials carry more radial sides, prop basal lobes soften to grip flares.
-   · F-03 optics — `gloss` maps to LOW roughness (PBR carries the highlight); the
-     synthetic hot glint is demoted to a soft supplementary wax lobe.
-   · S-01 sparkle sources — wind unified: custom shadow-depth materials for wood,
-     foliage and blossoms run the SAME deform; leaf normals rotate with the blades;
-     the custom sun vector is used in view space (was world-vs-view mismatch under
-     orbit); mirrored negative-determinant sprig instances removed (gl_FrontFacing).
-   · Q-01 architecture — per-scaffold attach/elevation/length jitter, asymmetric
-     terminal forks, seeded dome undulation, pruning leaves snag stubs, per-instance
-     leaflet pose jitter (the six shared patterns no longer repeat verbatim), props lean.
-   · Q-02 mobile hero — portrait framing fits crown width (dominant frame) and fog
-     scales with fitted camera distance; the audited containment behaviour is untouched.
-  Still required for release sign-off (per audit): continuous fixed-camera captures on
-  physical target GPUs at wind 0/.35/1 — the sparkle gate needs real-GPU temporal proof.
-  v4.11 (2026-07-15) adds the ?shot= capture helper (landing-page asset harvest):
-   shot=png (same-tick toDataURL at shotDpr, auto after shotWait frames) · shot=webm
-   (canvas.captureStream + MediaRecorder, shotSec loop) · shot=key (press P = png now,
-   V = start/stop webm — for hand-composed close-ups and explore glides). Auto-names
-   downloads <species>-<seed>-<scene>-<season>-<label>. App layer only, zero rng draws,
-   zero effect when ?shot is absent; see tools/capture-landing.html + site/assets/SHOTLIST.md.
-  --- v4 (2026-07-10) fixed the v3 audit: F1 lamina grid, F2 camptodromous venation,
-  F3 mobile panel clip, F4 graded senescence, #3 bounded optics. ---
-  banyan-bonsai_v3.html — exploratory next-gen one-file prototype (2026-07-08, r2).
-  Thesis kept from the playbook: a tree is a pure function of (seed, spec).
-  Everything else is presentation. v3 rewrites the presentation layers for
-  realism: sprig-based foliage (no flat single cards), plate buttress roots,
-  species bark families, ground ecology, and wind. r2 re-audit pass: fluted/
-  ropey banyan wood, carved leaf silhouettes with vein relief + translucency,
-  notched cherry petals w/ stamen discs, sinewy roots, per-leaf inspection
-  data, and 3 new prop-driven scenes (forest floor / autumn park / zen garden).
-  Deterministic: one mulberry32 stream for placement, integer-hash noise for detail.
-  Deps: three@0.165.0 via CDN import map (same dependency policy as dist).
-  Handle: window.v3 (alias window.banyan). URL: ?species=&seed=&scene=&season=&quality=
-  &view=az,el,dist&wind=&ui=0&spec=<uri-encoded JSON deep-merged into spec>.
+  Banyan: a seeded procedural tree study with a pinned local Three.js dependency.
+  Build this readable source with npm run build to produce banyan_v5.html.
+  The public panel offers banyan; additional experiments and diagnostic cameras
+  are gated to local review mode. Geometry is certified at balanced quality.
 -->
 <style>
   html,body{margin:0;height:100%;background:#111;overflow:hidden}
@@ -118,7 +62,7 @@
     #hud{top:10px;left:10px;right:10px;font-size:11px;max-width:none}
     #hud .promise{display:none}
     #stats{display:none}
-    /* v4/F3: bounded mobile panel — minmax(0,1fr) columns + shrinkable controls
+    /* v4: bounded mobile panel — minmax(0,1fr) columns + shrinkable controls
        cannot exceed the container, and overflow-x:hidden guarantees no horizontal
        scroll or right-column clipping at 360/390/430-px widths. */
     #panel{top:auto;left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom));width:auto;
@@ -175,7 +119,7 @@
     const box=document.getElementById('boot-status'),msg=document.getElementById('boot-message'),retry=document.getElementById('boot-retry');
     window.__treeBootFail=()=>{if(!box)return;box.hidden=false;msg.textContent='The tree renderer stopped before its first frame. This is a loading or browser error, not a verdict on your hardware. Reload once; if it repeats, check the browser console.';retry.hidden=false};
     let watchdog=setTimeout(window.__treeBootFail,8000);window.__treeBootReady=()=>clearTimeout(watchdog);
-    // fix-40/F3 · while the programs compile off the main thread the 8 s budget does not apply; 60 s does
+    // while the programs compile off the main thread the 8 s budget does not apply; 60 s does
     window.__treeBootPending=()=>{clearTimeout(watchdog);watchdog=setTimeout(window.__treeBootFail,60000)};
     addEventListener('error',window.__treeBootFail);addEventListener('unhandledrejection',window.__treeBootFail);
     retry.addEventListener('click',()=>location.reload());
@@ -184,7 +128,7 @@
 <script type="module">
 import * as THREE from 'three';
 
-/* ================= fix-16/A3 · SHADOW SOFTNESS, WITHOUT PAYING FOR TAPS =====
+/* ================= SHADOW SOFTNESS, WITHOUT PAYING FOR TAPS =====
 
    Measured, on the reference GPU, over tools/fps.html's own 30-second orbit:
 
@@ -209,11 +153,11 @@ import * as THREE from 'three';
    Written against the vendored r165 chunk and guarded: if either substitution
    fails to match, the pristine chunk is restored and a warning is logged, so a
    Three.js bump degrades to the old look rather than to a broken shader.  */
-/* SECTION B FINDING 2 · A3 ASKED FOR SOFTER SHADOWS, AND THE SHADOWS WERE
+/* SOFTER SHADOWS WERE REQUESTED, AND THE SHADOWS WERE
    ALREADY THE RIGHT SOFTNESS. Three attempts to widen the filter each made the
    picture worse, and the finding that motivated all of it was arithmetic.
 
-   THE ARITHMETIC FIRST, because everything else follows from it. The A3 note
+   THE ARITHMETIC FIRST, because everything else follows from it. The shadow-softness note
    below claimed "a 1024 map over a ~33 m shadow frustum is 32 mm per texel".
    The frustum is not 33 m. Read off the live shadow camera it is 19.56 m, so a
    texel is 19.1 mm. PCF_SOFT's taps run from -1 to +2 texels, a support of
@@ -263,7 +207,7 @@ import * as THREE from 'three';
    precisely to avoid this, and it is why it is the default.
 
    RE-REVIEW 2 rejected stopping there, and was right to. Restoring the stock
-   filter removes the regression attempt 1 introduced, but the A3 gate asks for
+   filter removes the regression attempt 1 introduced, but the shadow-softness gate asks for
    shadows SOFTER THAN THE PRE-FIX BASELINE, and a build that restores the
    baseline filter cannot show that. "The premise was wrong" is an argument
    about the gate; it is not a pass of it. So:
@@ -339,20 +283,7 @@ function shadowFilterRadius(k){return Math.min(SHADOW_RADIUS_MAX,Math.max(0,+k||
 /* Substitutes the whole PCF_SOFT branch, once, at module load. r <= 1 leaves the
    pristine chunk in place so ?shadow=soft is an honest control and the mobile
    preset is bit-for-bit what it was. */
-/* fix-40/F2 · HARDWARE COMPARE. The tent above is 64 point fetches, each an
-   RGBA unpack and a step(), on every lit fragment of every receiving program —
-   measured at 3.0 ms of a 21 ms desktop frame over the stock 9-tap filter
-   (review/fix/40/2026-09-02/phase0/fps/raw-pairs.*). WebGL2 can do the compare
-   in the texture unit: a depth texture with TEXTURE_COMPARE_MODE and LINEAR
-   filtering returns the bilinear-weighted compare of the 2x2 texels around the
-   sample in ONE fetch. A 4x4 grid of those, tent-weighted (0.4, 0.8, 0.8, 0.4)
-   at 1-texel spacing, has sigma 1.04 texels against the tent's 1.02 — the same
-   penumbra, verified with fix-16's penumbra metric — for 16 fetches and a
-   fraction of the shader text. The depth texture rides beside Three's packed
-   RGBA map (which stays, so nothing else in Three changes) and is bound on the
-   renderer's last texture unit each frame (ebBindShadowDepth). WebGL1 and
-   ?hwshadow=0 keep the tent. `taps`/`step` are compile-time so the still tier
-   can widen the footprint on a bigger map without paying per frame. */
+
 const EB_HW_SHADOW_UNIFORM='uEbShadowDepth';
 let hwShadowInstalled=false;
 function installShadowTent(r,hw=false,taps=4,step=1.0){
@@ -417,7 +348,7 @@ function applyShadowFilter(renderer,k){
      the CONTROL and is what the mobile preset keeps — ?shadow=soft pins it so
      before and after come from one build. Attempt 2 patched unconditionally, so
      its control tested the candidate against itself. */
-  // fix-40/F2 · the widened kernel (r > 1) runs on hardware compare wherever WebGL2 allows it
+  // the widened kernel (r > 1) runs on hardware compare wherever WebGL2 allows it
   const hw=r>1&&renderer.capabilities.isWebGL2&&Q.get('hwshadow')!=='0';
   shadowTentInstalled=installShadowTent(r,hw,4,1.0)&&r>1;
   renderer.shadowMap.type=THREE.PCFSoftShadowMap;
@@ -425,7 +356,7 @@ function applyShadowFilter(renderer,k){
   window.__ebShadowHw=hwShadowInstalled;   // QA: hardware compare in force
   return r;
 }
-/* fix-40/F2 · the depth texture beside Three's packed map. Three only creates
+/* the depth texture beside Three's packed map. Three only creates
    shadow.map when it is null, so creating it here — with a LINEAR, compare-mode
    depth texture attached — makes every later shadow pass write real depth
    next to the packed colour it already writes. Called at boot and wherever the
@@ -508,7 +439,7 @@ const SPECIES={
   sprig:{leaves:6,axis:.28,cup:.04,lamina:.7},
   fx:{tipW:.5,tipStart:.88,serr:[0,0],venation:'loop',veinN:9,veinCurve:.24,gloss:.86,veinTint:.4,underL:1.22},
   anchor:{step:.038,startFrac:.1,jitter:[.75,1.3],maxTwigRadius:.09,tipWeight:1.1,tipThresh:.8,tipBonus:1,terminalGuarantee:1,canopyBase:2.5,clump:{rate:.72,dense:.62,sparse:1.25}},
-  /* fix-16/A4 · "one hue" was literal: hJitter 0.016 is +-6 degrees of hue
+  /* "one hue" was literal: hJitter 0.016 is +-6 degrees of hue
      across 2 550 sprigs, so the whole canopy sat inside a band a viewer reads
      as a single green. Widened to +-16 degrees, with a stronger sun/shade hue
      ramp and half again the value spread. A real fig canopy is a range: new
@@ -524,12 +455,12 @@ const SPECIES={
   unripe:{h:[.22,.28],s:[.35,.5],l:[.3,.42]}},
  physics:{pipeExp:2.4,tipR:.006,twigGain:.0022,junctionCarry:true,junctionCollar:.16,flex:1.2e-4,react:.76,maxStep:.05,leafMass:1.0,leafR:.06,
   minR:.04,tipUp:.08,floorY:3.0,support:2.6,meshMaxDepth:4},
- /* fix-16/A13 · warmer. The A12 atlas put real fissure structure on the limb,
+ /* warmer. The bark atlas put real fissure structure on the limb,
     and against the old grey-brown crevice colour the trunk read as stone
     rather than as fig bark. This is ALBEDO, not exposure — the lights, the
     tone map and the exposure value are untouched.
 
-    Owner review, twice: "a little darker", then "10% more". The A13 first pass
+    Owner review, twice: "a little darker", then "10% more". The first colonisation pass
     warmed AND lightened, and the lightening was the part that was wrong. These
     are that first pass scaled by 0.90 twice — 0.81 in total, with the r:g:b
     ratios untouched, so the warmth stays and only the value moves.
@@ -836,7 +767,7 @@ baobab:{name:'Baobab',seed:30,
    scales with height, ornaments mature late (prop roots ~35yr+, aerials ~30yr+,
    fruit ~40yr+), young wood is smoother and litter thinner. Leaves stay
    full-size at every age — saplings carry adult leaves (true to botany, and it
-   keeps the leaf-size contract). Gates (§1) are asserted at age=100. */
+   keeps the leaf-size contract). The gates are asserted at age=100. */
 function applyAge(S,years){
   const m=clamp((years??100)/100,.2,1.2);
   if(Math.abs(m-1)<1e-6)return S;
@@ -927,7 +858,7 @@ const publicSeasonAllowed=(id,key)=>key==='live'||publicSeasonOptions(id).some(x
    defoliation. Counts change; the branch graph does not. */
 const SEASON_SPECIES={
  banyan:{
-  /* 3-4 I-P34-004 · the dry-season exchange has to be READ as dry by a casual
+  /* the dry-season exchange has to be READ as dry by a casual
      viewer, not measured. The old profile kept 92 % of the crown and nudged
      senescence to 3.5 %, so seed 863 lost 204 of 2 550 sprigs and still looked
      like high summer. Now: a hard density drop, twig ends deliberately left
@@ -1001,7 +932,7 @@ function applySeason(S,id,seasonKey){
 /* ================= quality presets =================
    r4: dpr capped (fill-rate was the #1 fps killer), radial trimmed —
    braids/bark relief come from geometry columns + baked normal detail. */
-/* fix-16/A3 · `soft` is the PCF tap radius in TEXELS. 1 selects the stock
+/* `soft` is the PCF tap radius in TEXELS. 1 selects the stock
    PCF_SOFT reconstruction, which `mobile` keeps and which is the A/B control;
    above 1 substitutes the tent kernel for that branch (installShadowTent has
    the whole account, including the two wrong turns and why 2 is the ceiling).
@@ -1023,9 +954,9 @@ function resolveQuality(q){
   if(q==='high'||q==='balanced'||q==='mobile')return QUALITY[q];
   const coarse=matchMedia&&matchMedia('(pointer:coarse)').matches;
   const constrained=(navigator.deviceMemory&&navigator.deviceMemory<=4)||(navigator.hardwareConcurrency&&navigator.hardwareConcurrency<=4);
-  /* fix-16 review · devicePixelRatio ALONE used to select `mobile`, which put
+  /* devicePixelRatio ALONE used to select `mobile`, which put
      every retina laptop and 4K desktop on the phone path. That was invisible
-     while the two paths were the same shaders with fewer sprigs; A10 made
+     while the two paths were the same shaders with fewer sprigs; the mobile shading pass made
      `mobile` a materially different, much barer material, so the same
      misclassification now costs a desktop visitor the entire realism pass.
      A high pixel ratio is a property of the SCREEN, not of the GPU behind it.
@@ -1579,12 +1510,12 @@ function growSkeleton(S,groundH,seedG){
           lerp(c.p.x,gx,t*t*(3-2*t))+sx*Math.sin(t*Math.PI)+bow,
           lerp(c.p.y,gy,t),
           lerp(c.p.z,gz,t*t*(3-2*t))+sz*Math.sin(t*Math.PI)));
-        radii.push(lerp(topR,botR,smoothstep(t,.4,.95))*(1+(fbm(t*5.5+sd,sd*.4,2.2,2)-.5)*.14));   // v4.1/F-02: calmer girth noise — no rocky bulges
+        radii.push(lerp(topR,botR,smoothstep(t,.4,.95))*(1+(fbm(t*5.5+sd,sd*.4,2.2,2)-.5)*.14));   // v4.1: calmer girth noise — no rocky bulges
       }
       pts.push(pts[steps2].clone().setY(gy-(PR.tailDepth??.11)));radii.push(botR*.78);
       const br={parent:c.parent,depth:1,kind:'prop',pts,radii,gnarl:PR.gnarl,
         rope:S.trunk.rope?{amp:.13,freq:4.2,vert:.65}:null,
-        // v4.1/F-02: gentler basal flutes over a longer span — grip flare, not boulders
+        // v4.1: gentler basal flutes over a longer span — grip flare, not boulders
         lobes:{count:Math.floor(rr(3,5)),phase:rr(0,Math.PI*2),base:.2,amp:.3,sharp:1.7,span:.5,mode:'end',twist:rr(.5,1.3)}};
       reg(br);
       // grip roots: splayed fingers that follow the terrain outward
@@ -1779,7 +1710,7 @@ function tubeGeometry(br,maxSegs,groundH,depthFlex){
   const maxR=Math.max(...radii);
   // stature: radial resolution keyed to REAL girth. The old thresholds were bonsai-sized,
   // so at forest scale ordinary limbs were meshed at trunk resolution (tri blowup).
-  // v4.1/F-02: roots/props/aerials are hero inspection surfaces — they carry more radial
+  // v4.1: roots/props/aerials are hero inspection surfaces — they carry more radial
   // sides than same-girth crown twigs (5–6-sided foreground roots read as rock lobes).
   const segsK=rootLike||br.kind==='aerial';
   const segs=Math.min(maxSegs,maxR>.35?maxSegs:maxR>.18?(segsK?24:20):maxR>.09?(segsK?18:14)
@@ -1793,7 +1724,7 @@ function tubeGeometry(br,maxSegs,groundH,depthFlex){
   // instead of growing 5 JS arrays with push() per vertex (which then get copied again at
   // merge). Same math, same output — this is pure allocation discipline.
   const NV=n*(segs+1), NI=(n-1)*segs*6;
-  /* fix-16/A1 · aTan carries the LIMB'S OWN AXIS per vertex. The bark shader
+  /* aTan carries the LIMB'S OWN AXIS per vertex. The bark shader
      needs it to orient its rope/fissure/annulation fields along the wood
      instead of along world up. Deriving it in the fragment shader from
      screen-space derivatives of the arclength UV was tried first and is a
@@ -1812,7 +1743,7 @@ function tubeGeometry(br,maxSegs,groundH,depthFlex){
   // VERTEX even though its argument is the spine point — identical for every vertex in the
   // ring. Hoisted to once per spine point: ~segs× fewer noise evaluations (this, not the
   // triangle count, was the wood-build bottleneck).
-  /* fix-16/A12 · how many whole bark tiles fit around this limb. It must be
+  /* how many whole bark tiles fit around this limb. It must be
      an INTEGER or the atlas does not wrap at the uv.x seam, and it must be
      per BRANCH rather than per ring, or a tapering limb would shear the
      texture along its length. The reference radius is the thickest ring. */
@@ -1900,7 +1831,7 @@ function tubeGeometry(br,maxSegs,groundH,depthFlex){
         const isProp=br.kind==='prop';
         const rc=(isProp?startCollar*.18:startCollar*.32)+gBlend*endBlend*(isProp?.08:.14);
         rootMul+=rc;rootAo-=Math.min(.18,rc*.22+gBlend*.07);
-        hSpread+=gBlend*(isProp?.34:.5);vSquash-=gBlend*(isProp?.26:.42);   // v4.1/F-02: feet flare + settle into soil — junction reads embedded
+        hSpread+=gBlend*(isProp?.34:.5);vSquash-=gBlend*(isProp?.26:.42);   // v4.1: feet flare + settle into soil — junction reads embedded
       }
       if(!isFinite(mul))mul=1; if(!isFinite(g))g=1; if(!isFinite(ao))ao=1;
       let Rr=Math.max(.0006,radii[i]*mul*g*collarMul*rootMul);
@@ -1980,8 +1911,8 @@ function buttressGeometry(bt,S,groundH){
       const nl=Math.hypot(nx,ny,nz)||1;
       norA.push(nx/nl,ny/nl,nz/nl);
       uvA.push(cw*.5+.5,along*1.6);
-      // fix-16/A1 · a buttress plate runs outward along its own azimuth.
-      // fix-16/A12 · its uv.x is a wall coordinate, not an angle, so one tile.
+      // a buttress plate runs outward along its own azimuth.
+      // its uv.x is a wall coordinate, not an angle, so one tile.
       tanA.push(dir.x,0,dir.z,1);
       const ao=clamp(.86+t*.14,0,1);
       colA.push(ao,ao,ao);
@@ -2067,7 +1998,7 @@ function buildWood(sk,S,Qx,groundH){
    ONE instanced unit = a sprig of nL individually-oriented curved blades.
    Geometry is stream-free (ihash01); transforms/colors draw from the stream. */
 function halfWidthFn(B,FX){
-  /* v4.1/F-01: `widthRatio` is the FULL width:length contract (Ficus benghalensis
+  /* v4.1: `widthRatio` is the FULL width:length contract (Ficus benghalensis
      ~0.66), so the returned HALF-width peaks at 0.5·length·widthRatio. The audited
      build used the full product as a half-width and grew blades ~1.32× wider than
      long. The species tip (formerly a fragment-shader carve) now narrows the
@@ -2093,7 +2024,7 @@ function buildSprigGeometry(S,detail=1){
   const B=S.foliage.blade,SP=S.foliage.sprig||{},FX=S.foliage.fx||{};
   const nL=SP.leaves??6,axisLen=SP.axis??.1,cup=SP.cup??.04,palmate=SP.mode==='palmate';
   const L=B.length,hw=halfWidthFn(B,FX);
-  { // v4.1/F-01: the width contract is explicit AND testable — warn on drift >8%
+  { // v4.1: the width contract is explicit AND testable — warn on drift >8%
     let wPk=0;for(let i=0;i<=64;i++)wPk=Math.max(wPk,hw(i/64));
     const got=2*wPk/L;
     if(B.outline!=='lobed'&&Math.abs(got-B.widthRatio)>B.widthRatio*.08+1e-3)
@@ -2102,14 +2033,14 @@ function buildSprigGeometry(S,detail=1){
   const keel=B.keel??.34,recurve=B.recurve??.38,droop=B.droop??.16,lift=B.lift??.03;
   const thick=B.thick??0,narrow=B.outline==='narrow';
   const hiD=detail>=1;   // V12: low detail trims per-sprig geometry, count stays
-  // v4/F1: denser hi-detail lamina grid — kills coarse silhouette facets (LSEG along
+  // v4: denser hi-detail lamina grid — kills coarse silhouette facets (LSEG along
   // the leaf edge) and planar cross-curl shading (WSEG across width). Mobile (hiD=false)
   // is untouched so the mobile triangle ceiling is unchanged.
   // stature: the v4 lamina grid was sized for BONSAI leaves that filled the screen.
   // At forest scale a leaf is a few px, so the dense grid bought nothing and cost ~4×
   // the triangles. Grid is now per-quality; mobile is unchanged.
   const LG=SP.lamina??1;
-  /* v4.1/F-01: the audited high tier resolved to a 5×2 lamina grid — visibly faceted
+  /* v4.1: the audited high tier resolved to a 5×2 lamina grid — visibly faceted
      kite silhouettes at inspection distance. High quality now floors at 8×4 for broad
      blades (smooth ovate margins + real cross-curl); mobile gets a mild bump only,
      since its leaves sit near-subpixel and carry the triangle ceiling. */
@@ -2185,7 +2116,7 @@ function buildSprigGeometry(S,detail=1){
         const r0=pos.length/3;
         for(let iu=0;iu<=LSEG;iu++){
           const u=iu/LSEG;
-          const th=L*sc*.008*thick*(.55+.45*(1-u));   // v4.1/F-03: rim thinned — margin bead stays subordinate to the blade
+          const th=L*sc*.008*thick*(.55+.45*(1-u));   // v4.1: rim thinned — margin bead stays subordinate to the blade
           nrm.copy(GZ[iu]).multiplyScalar(sgn).addScaledVector(GY[iu],-.45).normalize();
           pushV(GP[iu][iv],nrm,u,3);
           tmp.copy(GP[iu][iv]).addScaledVector(GN[iu][iv],-th).addScaledVector(GZ[iu],sgn*th*.3);
@@ -2209,7 +2140,7 @@ function buildSprigGeometry(S,detail=1){
         const yr=yR.clone().multiplyScalar(ct).addScaledVector(zR,st);
         const zr=zR.clone().multiplyScalar(ct).addScaledVector(yR,-st);
         const C=bladeBase.clone().addScaledVector(dir,x).addScaledVector(yr,y0);
-        const d=w*.085*(1-u*.55)*Math.max(thick,.5)+L*sc*.003;   // v4.1/F-03: keel subordinate to silhouette
+        const d=w*.085*(1-u*.55)*Math.max(thick,.5)+L*sc*.003;   // v4.1: keel subordinate to silhouette
         nL1.copy(zr).multiplyScalar(-1).addScaledVector(yr,-.55).normalize();
         nR1.copy(zr).addScaledVector(yr,-.55).normalize();
         nB.copy(yr).multiplyScalar(-1);
@@ -2337,7 +2268,7 @@ function buildFoliage(S,anchors,material,mul,detail=1,tipCover=1){
   const mesh=new THREE.InstancedMesh(geo,material,N);
   mesh.castShadow=true;mesh.receiveShadow=true;
   const aWind=new Float32Array(N*4);
-  const aSen=new Float32Array(N);   // v4/F4: per-instance senescence amount 0..1
+  const aSen=new Float32Array(N);   // v4: per-instance senescence amount 0..1
   const leafBranch=new Uint16Array(N);
   const inst={tip:new Float32Array(N),depth:new Uint8Array(N),scale:new Float32Array(N),
     sun:new Float32Array(N),hsl:new Float32Array(N*3),sen:new Uint8Array(N)};
@@ -2346,7 +2277,7 @@ function buildFoliage(S,anchors,material,mul,detail=1,tipCover=1){
   const positions=[];
   // V10: cover high-tip anchors first — random-with-replacement left bare twig
   // spikes exactly where silhouettes are judged; remainder stays random
-  /* 3-4 I-P34-004 · tipCover < 1 is the DRY phase's bare-twig cue: a
+  /* tipCover < 1 is the DRY phase's bare-twig cue: a
      deterministic scatter of terminal/high-tip anchors is struck out of the
      forced list AND out of the random pool, so those twig ends really do carry
      no sprig and the thinned crown reads as a dry canopy with bare tips
@@ -2396,7 +2327,7 @@ function buildFoliage(S,anchors,material,mul,detail=1,tipCover=1){
     zA.normalize();
     yA.crossVectors(zA,xA);
     const s=rr(S.foliage.scale[0],S.foliage.scale[1]);
-    // v4.1/S-01: mirrored (negative-determinant) instances flipped gl_FrontFacing per
+    // v4.1: mirrored (negative-determinant) instances flipped gl_FrontFacing per
     // sprig, so top/underside shading and translucency face-swapped in motion. The rng
     // draw is kept for stream stability; pose variety now comes from per-instance
     // leaflet jitter in the vertex shader (aWind.z).
@@ -2424,7 +2355,7 @@ function buildFoliage(S,anchors,material,mul,detail=1,tipCover=1){
     let h=P.h+rrOf(rand(),-P.hJitter,P.hJitter)-sun*P.sunHue;
     let sat=rrOf(rand(),P.s[0],P.s[1]);
     let l=Math.min(.4,P.lBase+sun*P.lSun+rrOf(rand(),-P.lJitter,P.lJitter));
-    // v4/F4: graded senescence — a scattered fraction of leaves age partially, more in
+    // v4: graded senescence — a scattered fraction of leaves age partially, more in
     // shade/inner canopy, each to its own degree (sv). Colour blends toward the senescent
     // target by sv, so a cluster reads as a green→yellow spread, not one flat mustard.
     let sen=0,sv=0;
@@ -2440,7 +2371,7 @@ function buildFoliage(S,anchors,material,mul,detail=1,tipCover=1){
     mesh.setColorAt(i,col);
   }
   geo.setAttribute('aWind',new THREE.InstancedBufferAttribute(aWind,4));
-  geo.setAttribute('aSen',new THREE.InstancedBufferAttribute(aSen,1));   // v4/F4
+  geo.setAttribute('aSen',new THREE.InstancedBufferAttribute(aSen,1));   // v4
   mesh.instanceMatrix.needsUpdate=true;
   if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;
   mesh.computeBoundingSphere();
@@ -2664,7 +2595,7 @@ float gustW(float t,float ph,vec3 wp){
   return (sin(t*0.55+ph+wp.x*0.22+wp.z*0.17)*0.6+sin(t*1.5+ph*1.7)*0.35+sin(t*2.6+ph*0.45)*0.12)
        *(0.55+0.45*sin(t*0.16+ph*0.31));
 }`;
-/* fix-16/A4 · SECTION B FINDING 3 · per-instance leaflet AZIMUTH about the
+/* per-instance leaflet AZIMUTH about the
    rachis.
 
    The sprig template is shared by every instance, and the only per-instance
@@ -2672,7 +2603,7 @@ float gustW(float t,float ph,vec3 wp){
    long axis. That changes how a blade faces; it does not change where the blade
    sits. So all 2,550 sprigs presented the same fan of six from the same six
    directions, and the canopy read as one rosette stamped 2,550 times — which is
-   what the reviewer saw under the canopy and what the A4 item is about.
+   what the reviewer saw under the canopy and what the leaflet-spread change addresses.
 
    This swings each leaflet AROUND THE RACHIS instead. The rachis runs along
    local +X and each leaflet's base aPO sits on it, so a rotation about X
@@ -2695,7 +2626,7 @@ float bnoise(vec3 p){vec3 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);
 float bfbm(vec3 p){float a=0.5,s=0.0;for(int i=0;i<4;i++){s+=a*bnoise(p);p*=2.03;a*=0.5;}return s*1.07;}
 float ridge(vec3 p){return 1.0-abs(bfbm(p)*2.0-1.0);}`;
 
-/* 3-4 I-P34-003 · GROUND noise.
+/* GROUND noise.
 
    A note on a hypothesis that was TESTED AND REJECTED, kept here so nobody
    spends the afternoon on it again. bhash() multiplies its three components
@@ -2706,7 +2637,7 @@ float ridge(vec3 p){return 1.0-abs(bfbm(p)*2.0-1.0);}`;
    ground's own 24 m patch at the ground's own scale and measured: the variance
    explained by binning on x·z is 2.4 % for the legacy field and 2.6 % for this
    one. At the frequency the soil actually samples, the legacy hash does NOT
-   degenerate. See review/fix/10/2026-07-26/A2/field-proof/.
+   degenerate. See the private measurement record
 
    What this field is for, then, is the part of the fix the prompt actually
    asks for — "vary the noise scale/rotation so streaks do not tile". Every
@@ -2722,10 +2653,10 @@ float gnoise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);
 float gfbm(vec2 p){float a=0.5,s=0.0;
   for(int i=0;i<5;i++){s+=a*gnoise(p);p=mat2(0.80902,0.58779,-0.58779,0.80902)*p*2.07+vec2(11.3,7.7);a*=0.5;}
   return clamp(s*1.03,0.0,1.0);}
-/* Footprint-limited twin — the v4.1/F-02 rule applied PER OCTAVE: an octave
+/* Footprint-limited twin — the v4.1 rule applied PER OCTAVE: an octave
    whose wavelength approaches the pixel footprint fades out instead of
    aliasing. Without it the (correctly) richer rotated field shimmers into
-   blocky mottle at the grazing angles a low memorial camera actually uses. */
+   blocky mottle at the grazing angles a low landscape camera actually uses. */
 float gfbmB(vec2 p){float w=fwidth(p.x)+fwidth(p.y);float a=0.5,s=0.0,f=1.0;
   for(int i=0;i<5;i++){
     s+=a*gnoise(p)*(1.0-smoothstep(0.22,0.60,f*w));
@@ -2733,14 +2664,14 @@ float gfbmB(vec2 p){float w=fwidth(p.x)+fwidth(p.y);float a=0.5,s=0.0,f=1.0;
   return clamp(s*1.03,0.0,1.0);}
 float gwarp(vec2 p,float k){return gfbmB(p+k*vec2(gfbm(p*0.53+19.0),gfbm(p*0.61-7.0)));}`;
 
-/* ================= fix-16/A12 · THE BARK ATLAS =================
+/* ================= THE BARK ATLAS =================
 
    WHY A TEXTURE AT ALL, in a renderer whose whole point is that it imports
    nothing:
 
    Every bark signal in this file is evaluated per pixel from value noise, and
    value noise HAS NO MIPMAPS. The only defence against aliasing is the
-   derivative band limit, which is what A1's entire fight was about. Measured
+   derivative band limit, which is what the bark-detail work addressed. Measured
    on the trunk macro: 154 px/m available, and the limit correctly removes
    everything above roughly 25-40 cycles/m there. Real bark — the owner's
    reference photographs — carries structure at 100-400 cycles/m: two- to
@@ -2766,18 +2697,13 @@ float gwarp(vec2 p,float k){return gfbmB(p+k*vec2(gfbm(p*0.53+19.0),gfbm(p*0.61-
    FOUR CHANNELS, because the bake is free real estate:
      R  height        the crevice/ridge ramp and the relief normal
      G  fine grain    albedo mottle
-     B  lichen mask   A13
+     B  lichen mask
      A  pore mask     lenticels and flake pits                          */
 const BARK_TILE_M=1.0;          // one tile of the atlas is a metre of bark
 let barkAtlasTex=null;
 function bakeBarkAtlas(renderer){
   if(barkAtlasTex)return barkAtlasTex;
-  /* fix-40 · still tier tried 4096 per metre and measured it useless: at the
-     4K frame's ~4 mm pixel the 1024 atlas already exceeds what the pixel can
-     resolve (mip >= 1 is selected), the crops did not change, and the 16x bake
-     cost real minutes on the VPS worker's software rasteriser (775 s per
-     portrait against a 370 s baseline and a +5 min ceiling — review/fix/40/
-     2026-09-03/vps/). 1024 for every path; the still keeps anisotropy 16. */
+  
   const SIZE=1024;
   const rt=new THREE.WebGLRenderTarget(SIZE,SIZE,{
     wrapS:THREE.RepeatWrapping,wrapT:THREE.RepeatWrapping,
@@ -2841,7 +2767,7 @@ void main(){
   float h=0.80-g1*0.50-g2*0.18*(0.4+0.6*plate)-g3*0.035;
   /* flake shelves: a broken horizontal break that lifts one edge.
 
-     SECTION B FINDING 5 · THIS WAS THE RECTANGULAR MARK. Three octaves off a
+     THIS WAS THE RECTANGULAR MARK. Three octaves off a
      7x17 lattice, thresholded through a narrow 0.62-0.70 band, gives
      flat-topped plateaux whose OUTLINE is that coarse lattice - straight
      horizontal edges and square corners - and the +0.05 height step then
@@ -2860,7 +2786,7 @@ void main(){
   h+=shelf*0.05;
   h=clamp(h,0.0,1.0);
 
-  /* SECTION B FINDING 5 · THE FINE CHANNELS WERE ON AN AXIS-ALIGNED LATTICE.
+  /* THE FINE CHANNELS WERE ON AN AXIS-ALIGNED LATTICE.
      warp above is a 5x3 field. Across a 7 px pore cell it is essentially
      constant, so it TRANSLATES the fine lattices rather than deforming them,
      and grain, lichen crust and pores all kept their cell boundaries square to
@@ -2880,7 +2806,7 @@ void main(){
   // --- G · FINE GRAIN. 220 cycles per tile = 440 cycles/m at the finest.
   float grain=pn(uv+fw*0.008,vec2(90.0,44.0))*0.62+pn(uv+0.7+fw*0.004,vec2(190.0,95.0))*0.38;
 
-  // --- B · LICHEN (A13). Crustose lichen grows in irregular rosettes with a
+  // --- B · LICHEN. Crustose lichen grows in irregular rosettes with a
   //     denser rim; the mask carries the patch AND its rim so the shader can
   //     colour them differently.
   float lp=pfbm(uv+0.83,vec2(3.0,2.0),4);
@@ -2910,11 +2836,11 @@ void main(){
   return barkAtlasTex;
 }
 
-/* fix-40 phone round · THE BARK FIELDS, BAKED. F1 moved the five colonisation
+/* THE BARK FIELDS, BAKED. The shading pass moved the five colonisation
    and mottle fields off the bark pixel onto the bark vertex — a win on the
    reference desktop, where the trunk covers more pixels than it has vertices.
    On the iPhone 13 the same move read as 6.2 ms of a 24 ms frame
-   (review/fix/40/2026-09-03/phone/BENCH-SPLIT.md): ~95 k vertices × five
+   (the private measurement record): ~95 k vertices × five
    4-octave fbms every frame on a tile-based GPU, at a pose where the trunk
    covers fewer pixels than that; the pre-40 runtime's bark cost 1.1 ms there.
    The fields are pure functions of the world position, so they are evaluated
@@ -3048,15 +2974,15 @@ ${NOISE_GLSL}
 ${BARK_FIELDS_GLSL}`)
       .replace('#include <begin_vertex>',`#include <begin_vertex>
 vWP=(modelMatrix*vec4(position,1.0)).xyz;
-/* fix-40/F1 · THE COLONISATION FIELDS ARE PER-VERTEX NOW. Lichen colonies,
+/* THE COLONISATION FIELDS ARE PER-VERTEX NOW. Lichen colonies,
    algal film, damp streaks, moisture and the warm mottle are 0.7-2.6 cycles
-   per metre by construction (fix-16/A13: LOW frequency so they survive to the
+   per metre by construction (LOW frequency so they survive to the
    arrival distance). A limb's rings sit centimetres apart, so evaluating them
    here and interpolating loses nothing a pixel can show, and it takes five
    4-octave fbms off every bark pixel: the slice measured that block at 2.45 ms
    of a 21 ms frame on the reference desktop. Smoothstepped BEFORE
    interpolation, so the thresholds keep their contrast between vertices.
-   fix-40 phone round: on WebGL2 the same five fields arrive BAKED as vertex
+   on WebGL2 the same five fields arrive BAKED as vertex
    attributes (ebBakeBarkFields — the same GLSL run once at build time), so the
    per-frame vertex stage no longer pays for them; the #else branch is the
    WebGL1 / ?barkbake=0 path and is the function the bake evaluates. */
@@ -3065,10 +2991,10 @@ vColony=vec4(aColony0,aColony1,aColony2,aColony3);vMott=aMott;
 #else
 vColony=ebColony(vWP);vMott=ebMott(vWP);
 #endif
-vTan=mat3(modelMatrix)*aTan.xyz;   // fix-16/A1 · the limb axis, in world space
-// fix-16/A12 · the atlas coordinate: whole tiles AROUND the limb (so uv.x
+vTan=mat3(modelMatrix)*aTan.xyz;   // the limb axis, in world space
+// the atlas coordinate: whole tiles AROUND the limb (so uv.x
 // wraps exactly at the seam) and metres ALONG it divided by the tile size.
-// fix-16/A12 · a per-BRANCH phase offset, so neighbouring limbs do not show
+// a per-BRANCH phase offset, so neighbouring limbs do not show
 // the same tile in register. aInfo.w is the branch's own phase, already here.
 vBarkUv=vec2(uv.x*aTan.w,uv.y*0.625)+vec2(fract(aInfo.w*0.37),fract(aInfo.w*0.71));
 vBUv=uv;vInfo=aInfo;
@@ -3080,12 +3006,12 @@ vBUv=uv;vInfo=aInfo;
     sh.fragmentShader=sh.fragmentShader
       .replace('#include <common>',`#include <common>
 varying vec3 vWP;varying vec2 vBUv;varying vec4 vInfo;varying vec3 vTan;varying vec2 vBarkUv;
-varying vec4 vColony;varying float vMott;   // fix-40/F1 · lichen colony tint, alga, streak mask, moisture; warm mottle
+varying vec4 vColony;varying float vMott;   // lichen colony tint, alga, streak mask, moisture; warm mottle
 uniform sampler2D uBarkTex;uniform vec3 uSunV;uniform float uBump;uniform float uStria;uniform float uMottle;
 uniform vec3 uCrev;uniform vec3 uRidge;uniform vec3 uLentic;
 float gH;float gLent;
 float bFoot;float bNear;vec3 bTl;float bAlong;
-/* fix-16/A1 · gFine is the part of the height field that must NOT reach the
+/* gFine is the part of the height field that must NOT reach the
    normal. The normal is built from SCREEN-SPACE derivatives of the height, so
    a feature four pixels wide differentiates into a one-pixel signal and comes
    back as per-pixel speckle — the first two attempts at this section put fine
@@ -3094,13 +3020,13 @@ float bFoot;float bNear;vec3 bTl;float bAlong;
    differentiates it. Recorded because it is the whole reason the earlier
    "more detail" attempts looked worse than the smear they replaced. */
 float gFine;
-/* fix-16/A12 · the atlas's own height, hoisted out of barkH() so the albedo
+/* the atlas's own height, hoisted out of barkH() so the albedo
    pass can cut a groove where the relief has one. */
 float gBarkH;vec4 gBarkTex;
 ${NOISE_GLSL}
-/* fix-16/A1 · THE PIXEL FOOTPRINT, MEASURED ONCE AND MEASURED RIGHT.
+/* THE PIXEL FOOTPRINT, MEASURED ONCE AND MEASURED RIGHT.
 
-   v4.1/F-02 introduced the derivative band-limit — a procedural frequency
+   v4.1 introduced the derivative band-limit — a procedural frequency
    fades out once its wavelength nears the pixel footprint, because procedural
    GLSL has no mipmaps. The idea is correct. Two things about it were not:
 
@@ -3121,7 +3047,7 @@ ${NOISE_GLSL}
       same footprint, so detail appears when the bark is BIG ON SCREEN. */
 float bband(float f){return 1.0-smoothstep(0.24,0.48,f*bFoot);}
 float bbandUv(float f){return 1.0-smoothstep(0.24,0.48,f*fwidth(vBUv.y)*1.4);}
-/* fix-16/A1 · THE LIMB'S OWN FRAME.
+/* THE LIMB'S OWN FRAME.
 
    Every bark field was built in WORLD space with a hard-coded vertical squash
    (the rope network ran vec3(x*3.4, y*0.8, z*3.4) — a 4.25:1 stretch along
@@ -3135,13 +3061,13 @@ float bbandUv(float f){return 1.0-smoothstep(0.24,0.48,f*fwidth(vBUv.y)*1.4);}
    "ropes run along the limb" and "wrinkles run around it" are true wherever
    the limb points. Four derivatives and a normalize; no new noise. */
 vec3 limbQ(vec3 p,float s){return p+bTl*(dot(p,bTl)*(s-1.0));}
-/* fix-16/A1 · A BAND-LIMITED 3-D fbm, which the bark never had.
+/* A BAND-LIMITED 3-D fbm, which the bark never had.
 
    bfbm() is four octaves with no per-octave limit, so bfbm(p*16) carries
    content up to 128 cycles/m whatever the band limit applied to the RESULT
    says. That is where the salt-and-pepper in attempts one to three came from:
    the fissure layer was band-limited at its base frequency and its own top
-   octave aliased straight through. The ground field solved this in v4.1/F-02
+   octave aliased straight through. The ground field solved this in v4.1
    (gfbmB); the bark field never got the same treatment because until now it
    had no octave near the pixel footprint. Same cost class as bfbm. */
 float bfbmB(vec3 p,float f0){float a=0.5,s=0.0,f=f0;
@@ -3158,7 +3084,7 @@ float lentStrip(){
 }
 float barkH(){
   float bs=vInfo.y;
-  // fix-16/A1 · one footprint, measured once, shared by every band limit below.
+  // one footprint, measured once, shared by every band limit below.
   bFoot=length(fwidth(vWP));
   bNear=1.0-smoothstep(0.004,0.020,bFoot);           // detail appears when bark is BIG ON SCREEN
   {
@@ -3187,17 +3113,17 @@ float barkH(){
   float rope2=ridgeB(limbQ(vWP*7.2,0.236)+warp.yzx,7.2);
   float base=bfbmB(limbQ(vWP*2.0,1.9),3.8);
   float bandMask=smoothstep(0.28,0.68,bfbm(vWP*1.15+13.0));
-  // v4.1/F-02: wrinkle bands halved + warped harder — macro shots read them as flat
+  // v4.1: wrinkle bands halved + warped harder — macro shots read them as flat
   // horizontal banding; every fine signal below is band-limited by pixel footprint.
   float band=pow(sin(vBUv.y*34.0+base*13.0)*0.5+0.5,1.6)*bandMask*bbandUv(6.0);
 #else
-  float ropeS=0.5,rope2=0.5,base=0.5,band=0.0;   // fix-40 slice 1: macro fields off
+  float ropeS=0.5,rope2=0.5,base=0.5,band=0.0;   // macro fields off
 #endif
-  /* fix-16/A12 · ONE TEXTURE FETCH IS NOW THE WHOLE FINE BAND.
+  /* ONE TEXTURE FETCH IS NOW THE WHOLE FINE BAND.
 
-     What stood here was A1's fissure layer — two band-limited ridged fbms
+     What stood here was the earlier fissure layer — two band-limited ridged fbms
      (eight noise samples) plus lenticels, pustules and grain (three more) —
-     and A1's own comment recorded the ceiling it was working against: the
+     and its own comment recorded the ceiling it was working against: the
      macro pose resolves 154 px/m, the derivative band limit correctly removes
      everything above ~25-40 cycles/m there, and a first attempt at real bark
      frequencies came back as salt-and-pepper because the renderer cannot
@@ -3209,12 +3135,12 @@ float barkH(){
      at the arrival frame, and never aliased at either.
 
      It is also CHEAPER — one fetch against eleven noise samples — which is why
-     the mobile path keeps it. A10's saving now comes from the leaf loop, the
+     the mobile path keeps it. The mobile saving now comes from the leaf loop, the
      derivative normals and MSAA, and NOT from making the bark bare, which is
      what made it read as cartoon in the owner's review.
 
      bNear does NOT gate any of this. Distance is the mipmap's job now, and
-     doing it twice was exactly the mistake A1 was fixing. */
+     doing it twice was exactly the mistake the earlier bark work was fixing. */
   vec4 bTex=texture2D(uBarkTex,vBarkUv);gBarkTex=bTex;
   float bH=bTex.r;gBarkH=bH;              // fissure + flake relief, 0..1
   float grainT=bTex.g-0.5;                // fine grain, signed
@@ -3254,7 +3180,7 @@ float barkH(){
      stay out of it. */
   gFine=(grainT*0.038-poreT*0.018)*bs;
   h+=gFine;
-  /* fix-16/A1 · PROP ROOTS GET THEIR OWN SURFACE (kind 2), not the trunk's
+  /* PROP ROOTS GET THEIR OWN SURFACE (kind 2), not the trunk's
      network shrunk. A banyan prop is a fused column: long parallel fibre
      bundles running its length, growth annulations ringing it, and far less of
      the trunk's anastomosing rope. Built entirely from fields already
@@ -3300,7 +3226,7 @@ float barkH(){
   float kindW=vInfo.z;
   float twigF=1.0-smoothstep(0.06,0.4,bs);
 #if (SLICE & 2)==0
-  if(dAtt>0.02){   // fix-40/F1 · same footprint branch as the albedo block below
+  if(dAtt>0.02){   // same footprint branch as the albedo block below
   float striT=bfbm(vec3(vBUv.x*7.0,vWP.y*2.0,vBUv.y*14.0));
   float rootK=step(1.5,kindW)*step(kindW,4.5);
   float fib=1.0-abs(bnoise(vec3(vBUv.x*9.0,vBUv.y*1.6,7.7))*2.0-1.0);
@@ -3326,13 +3252,13 @@ float lenticels(){
   float bs=vInfo.y;
   float moist=1.0-smoothstep(0.02,0.4,vWP.y);
   vec3 bark=mix(uCrev*0.70,uRidge*1.12,smoothstep(0.18,0.84,gH));   // V1: wider crevice/ridge albedo separation
-  bark*=mix(0.68,1.06,smoothstep(0.06,0.85,gH));                    // v4.1/F-02: occlusion floor lifted — no black smear at macro
+  bark*=mix(0.68,1.06,smoothstep(0.06,0.85,gH));                    // v4.1: occlusion floor lifted — no black smear at macro
 #if BARKF==0
   bark*=0.86+0.14*smoothstep(0.06,0.58,gH);                       // crevice occlusion between ropes (tempered)
 #if (SLICE & 4)==0
-  bark=mix(bark,bark*vec3(1.09,1.04,0.94),vMott*0.4);           // warm tan patches (v4.1: tempered) — fix-40/F1: per-vertex field
+  bark=mix(bark,bark*vec3(1.09,1.04,0.94),vMott*0.4);           // warm tan patches (v4.1: tempered) — per-vertex field
 #endif
-  /* ================= fix-16/A13 · COLONISATION =================
+  /* ================= COLONISATION =================
 
      After fissure, the most obvious thing in every photograph on the owner's
      reference strip is that real bark is COLONISED. V5 had one faint algal
@@ -3371,7 +3297,7 @@ float lenticels(){
     float crust=lich*(0.35+0.75*shade)*smoothstep(0.12,0.5,bs);
     crust=clamp(crust,0.0,1.0);
     vec3 lichenC=vec3(0.60,0.62,0.53)*(0.84+0.30*gBarkTex.g);
-    // colonies differ: some grey-white, some distinctly green (fix-40/F1: the field is per-vertex, vColony.x)
+    // colonies differ: some grey-white, some distinctly green (the field is per-vertex, vColony.x)
     lichenC=mix(lichenC,lichenC*vec3(0.84,1.02,0.74),vColony.x);
     bark=mix(bark,lichenC,crust*0.34);
     bark=mix(bark,lichenC*vec3(0.88,0.94,0.82),crust*crust*0.16);   // denser rim reads greener
@@ -3392,7 +3318,7 @@ float lenticels(){
   float scar=smoothstep(0.86,0.95,bnoise(vWP*vec3(3.0,9.0,3.0)+4.0));
   bark*=1.0-scar*0.22;
 #endif
-  /* fix-16/A12 · a deep groove is a CUT: it is occluded as well as darker, and
+  /* a deep groove is a CUT: it is occluded as well as darker, and
      the ridge shoulder beside it catches the light. The albedo ramp alone is
      too gentle to read as either. */
   float groove=pow(clamp((0.52-gBarkH)/0.52,0.0,1.0),1.4);
@@ -3421,7 +3347,7 @@ float lenticels(){
   bark=mix(bark,uLentic,smoothstep(0.7,0.82,dash)*(1.0-smoothstep(0.84,0.94,dash))*0.75);
 #endif
   bark*=1.0-0.22*moist;
-  /* fix-16/A2 · THE WOOD SIDE OF THE CONTACT.
+  /* THE WOOD SIDE OF THE CONTACT.
      The ground was already darkened where roots press it; the wood was not,
      so a prop root met a shadowed patch of soil with a fully lit foot and read
      as pasted on. Two terms, no new noise: ambient occlusion in the crook, and
@@ -3437,10 +3363,10 @@ float lenticels(){
   float young=step(0.5,kindW)*step(kindW,1.5)+step(5.5,kindW);
   bark=mix(bark,bark*vec3(0.85,1.02,0.8),young*(1.0-smoothstep(0.03,0.22,bs)));
   // twig bark: soft irregular tone patches (no regular ribs) + sparse bud-scale scars
-  float dAtt2=bNear;   // fix-16/A1 · footprint, not camera distance (see bband)
+  float dAtt2=bNear;   // footprint, not camera distance (see bband)
   float twigF=1.0-smoothstep(0.06,0.4,bs);
 #if (SLICE & 2)==0
-  /* fix-40/F1 · a real branch: these terms were already multiplied by the
+  /* a real branch: these terms were already multiplied by the
      footprint factor, which the GPU cannot skip. Below 2 % they moved a 16 %
      modulation by under 0.3 % — nothing a pixel shows — and at the arrival
      distance that is the whole trunk. */
@@ -3476,7 +3402,7 @@ roughnessFactor=clamp(roughnessFactor,0.34,1.0);`)
   vec3 sx=dFdx(sp),sy=dFdy(sp);
   vec3 r1=cross(sy,normal),r2=cross(normal,sx);
   float det=dot(sx,r1);
-  float rh=gH-gFine;   // fix-16/A1 · relief only; fine grain shades, it does not bump
+  float rh=gH-gFine;   // relief only; fine grain shades, it does not bump
 #if BARKF==1
   rh+=crackMask()*0.7*vInfo.y;
 #endif
@@ -3488,7 +3414,7 @@ roughnessFactor=clamp(roughnessFactor,0.34,1.0);`)
   normal=normal;
 #else
   vec3 grad=sign(det)*(dFdx(rh)*r1+dFdy(rh)*r2);
-  normal=normalize(abs(det)*normal-uBump*0.16*mix(0.25,1.0,vInfo.y)*grad);   // V1: ~3.5x; fix-16/A12: the atlas relief is prefiltered, so it can be differentiated safely
+  normal=normalize(abs(det)*normal-uBump*0.16*mix(0.25,1.0,vInfo.y)*grad);   // V1: ~3.5x; the atlas relief is prefiltered, so it can be differentiated safely
 #endif
 }`);
     mat.userData.shader=sh;
@@ -3498,16 +3424,16 @@ roughnessFactor=clamp(roughnessFactor,0.34,1.0);`)
 
 function makeLeafMaterial(S,windU,canopyU){
   const FX=S.foliage.fx||{};
-  // v4.1/F-03: `gloss` maps to LOW roughness (the audited build assigned it to roughness
+  // v4.1: `gloss` maps to LOW roughness (the audited build assigned it to roughness
   // directly — a matte base that a separate synthetic glint then had to fake). One
   // coherent cuticle response: PBR specular carries the highlight.
   const mat=new THREE.MeshStandardMaterial({color:0xffffff,roughness:clamp(1.05-.75*(FX.gloss??.5),.3,.9),metalness:0,side:THREE.DoubleSide});
-  /* fix-16/A10 · alphaToCoverage REQUIRES MSAA, and MSAA on a tile-based GPU
+  /* alphaToCoverage REQUIRES MSAA, and MSAA on a tile-based GPU
      raises tile memory pressure across the whole frame rather than only where
      the leaves are. The mobile path drops it; the banyan is entire-margined
      and sets serr to [0,0], so on the shipping species this changes nothing
      visually at all and simply stops MSAA being demanded. */
-  if((FX.serr||[0,0])[0]>0&&!MOBILE_PATH)mat.alphaToCoverage=true;   // v4.1/F-01: serrated margins via MSAA coverage, not binary discard
+  if((FX.serr||[0,0])[0]>0&&!MOBILE_PATH)mat.alphaToCoverage=true;   // v4.1: serrated margins via MSAA coverage, not binary discard
   mat.onBeforeCompile=sh=>{
     sh.defines={...(sh.defines||{}),MOB:MOBILE_PATH?'1':'0',SLICE:String(SLICE)};
     Object.assign(sh.uniforms,{
@@ -3525,7 +3451,7 @@ varying vec2 vLUv;varying float vLf;varying float vSen;
 uniform float uT;uniform float uWind;uniform vec3 uWDir;uniform vec3 uCanC;
 ${GUST_GLSL}${LEAF_SWING_GLSL}`)
       .replace('#include <beginnormal_vertex>',`#include <beginnormal_vertex>
-// v4.1/S-01: the wind pose is computed ONCE here and applied to normals AND positions
+// v4.1: the wind pose is computed ONCE here and applied to normals AND positions
 // (and mirrored into the custom shadow-depth material), so lighting, silhouette and cast
 // shadows agree under wind. wIj adds per-instance leaflet pose decorrelation (Q-01: the
 // six shared leaflet patterns no longer repeat verbatim across 2,300 sprigs).
@@ -3534,7 +3460,7 @@ float wTw=(fract(aWind.z*7.13+aLf*0.618)-0.5)*0.6;
 float wIj=(fract(aWind.z*23.7+max(aLf,0.0)*3.1)-0.5)*step(-0.5,aLf);
 float wFl=uWind*(0.05+0.11*uv.x)*sin(uT*wFf*(0.35+0.6*uWind)+aLf*1.9+wPh);   // stature: calm at low wind, lively at full
 float wAng=wTw*0.5+wIj*0.38+wFl;
-// fix-16/A4 · swing about the rachis FIRST, and carry aAx with it, so the wind
+// swing about the rachis FIRST, and carry aAx with it, so the wind
 // roll still turns the blade about its own length after it has been moved.
 float sA=lfSwing(aWind,aLf),sC=cos(sA),sS=sin(sA);
 vec3 wAx=normalize(lfSwingRot(aAx,sC,sS));
@@ -3584,7 +3510,7 @@ ${NOISE_GLSL}`)
   if(vLUv.y>1.5){
     diffuseColor.rgb=mix(diffuseColor.rgb*0.55,vec3(0.3,0.25,0.14),0.6); // rachis
   }else{
-    // v4.1/F-01: the silhouette IS the mesh outline now (species tip + margin live in
+    // v4.1: the silhouette IS the mesh outline now (species tip + margin live in
     // geometry) — no noise nibble, no binary tip cut, and for entire-margined species
     // (banyan) no discard at all. Serrated species modulate MSAA coverage with a
     // derivative-smoothed profile (alphaToCoverage) instead of a hard cut.
@@ -3608,13 +3534,13 @@ ${NOISE_GLSL}`)
       diffuseColor.rgb=c;
     }else{
     float dAttL2=clamp(1.7/(1.0+length(vViewPosition)*2.1),0.0,1.0); // vein detail dies out by ~1.5m
-    // v4.1/F-03: screen-footprint band limits — any signal whose wavelength nears the
+    // v4.1: screen-footprint band limits — any signal whose wavelength nears the
     // pixel footprint fades out instead of aliasing into salt-and-pepper speckle.
     float fpU=fwidth(u)+1e-6;
     float bl20=1.0-smoothstep(0.20,0.5,fpU*20.0);
     float bl44=1.0-smoothstep(0.20,0.5,fpU*44.0);
     float aaV=fwidth(v)*1.2;
-    // === v4/F2: camptodromous banyan venation — a hierarchy, not periodic bands ===
+    // === v4: camptodromous banyan venation — a hierarchy, not periodic bands ===
     // midrib: tapering, with a gentle S-drift so it is not a ruler line
     float vv=v-(bnoise(vec3(u*2.3,vLf*3.7,9.1))-0.5)*0.06*u;
     float avv=abs(vv);
@@ -3626,16 +3552,16 @@ ${NOISE_GLSL}`)
     // secondaries: DISCRETE veins leaving the midrib at irregular points, each arcing
     // toward the apex with its own curvature, then looping to run along the margin.
 #if MOB==1 || (SLICE & 32)!=0
-    /* fix-16/A10 · THE SIXTEEN-ITERATION LOOP. The phone report named this as
+    /* THE SIXTEEN-ITERATION LOOP. The phone report named this as
        the other fragment loop in the build, and it runs on every leaf pixel of
        a 2 100-sprig canopy that fills the frame. A banyan leaf's venation is
-       not resolvable on a 390 px-wide phone at any distance the product uses,
+       not resolvable on a 390 px-wide phone at any distance the default camera uses,
        so the whole hierarchy is replaced by the midrib alone. */
     float lat=0.0,nearU=1.0;
 #else
     float latRelief=0.0;                                           // nearest-vein response
     float nearU=1.0;                                               // u-distance to nearest vein
-    /* fix-40/F1 · THE LOOP ONLY WHERE A VEIN CAN BE SEEN. fpU is the pixel
+    /* THE LOOP ONLY WHERE A VEIN CAN BE SEEN. fpU is the pixel
        footprint along the blade (1/leaf length in px). Past ~0.05 (a leaf
        under 20 px long) every secondary is already widened to the footprint
        and clamped to 35 % strength, so the loop's output is a broad tint, not
@@ -3676,9 +3602,9 @@ ${NOISE_GLSL}`)
     lVein=clamp(mid+lat*0.72,0.0,1.0);
     lDome=smoothstep(0.02,0.16,nearU)*smoothstep(0.05,0.18,avv)*(1.0-mid)*dAttL2*denseK*0.7; // intercostal lift
     // reticulation: soft cellular net between secondaries — band-limited so it can
-    // never resolve into salt-and-pepper (v4.1/F-03)
+    // never resolve into salt-and-pepper (v4.1)
 #if (SLICE & 64)==0
-    /* fix-40/F1 · both terms are multiplied by bl20, which is exactly zero
+    /* both terms are multiplied by bl20, which is exactly zero
        once the footprint passes half a cycle at 20 cycles per blade — every
        leaf at the arrival distance. A branch makes that zero free: 2.45 ms of
        the desktop frame, byte-identical output wherever bl20 was already 0. */
@@ -3694,7 +3620,7 @@ ${NOISE_GLSL}`)
     lH=mid*0.55+lat*0.24+lDome*0.10+ret*0.05+tert*0.10;
     lRim=1.0-smoothstep(0.0,0.05,rimD);
     vec3 c=diffuseColor.rgb;
-    // fix-16/A4 · per-LEAFLET spread, on top of the per-instance spread above:
+    // per-LEAFLET spread, on top of the per-instance spread above:
     // six blades on one sprig used to differ by 8% in value and nothing in hue,
     // which is what makes a sprig read as one flat rosette.
     c*=0.86+0.28*lfH;
@@ -3714,7 +3640,7 @@ ${NOISE_GLSL}`)
     c=mix(c,c*vec3(0.82,0.86,0.72),lRim*0.3);                        // darker thickened margin bead
     c*=1.0-0.15*(1.0-smoothstep(0.0,0.09,rimD));                     // dry margin line (soft)
     c=mix(c,c*vec3(1.07,1.02,0.86),smoothstep(0.62,1.0,u)*0.25);     // warm tip
-    // v4/F4: intra-leaf senescence — yellowing/browning advances from the margin and tip
+    // v4: intra-leaf senescence — yellowing/browning advances from the margin and tip
     // inward with an irregular front; veins hold green longest (green islands). vSen (per
     // instance) sets how far the front has advanced on THIS leaf, so neighbours in a cluster
     // differ in overall tint AND internal pattern instead of one flat mustard.
@@ -3738,7 +3664,7 @@ ${NOISE_GLSL}`)
       .replace('#include <roughnessmap_fragment>',`#include <roughnessmap_fragment>
 if(vLUv.y<1.5){
 #if (SLICE & 64)==0
-  // fix-40/F1 · the roughness grain is 9x7 cycles per blade: sub-pixel on any leaf under ~40 px, where it only averaged to zero
+  // the roughness grain is 9x7 cycles per blade: sub-pixel on any leaf under ~40 px, where it only averaged to zero
   float rgh=0.0;
   if(fwidth(vLUv.x)<0.025)rgh=(bfbm(vec3(vLUv.x*9.0,vLUv.y*7.0,vLf))-0.5)*0.05;
   roughnessFactor=clamp(roughnessFactor+lVein*0.10-lDome*0.06+rgh,0.22,0.85);
@@ -3752,7 +3678,7 @@ if(!gl_FrontFacing)roughnessFactor=min(1.0,roughnessFactor+0.42);
 #if (SLICE & 128)==0
 if(vLUv.y<1.5){
   float dAttL=1.0/(1.0+length(vViewPosition)*0.8);
-  // fix-40/F1 · the relief is scaled by dAttL, 0.06 at the arrival distance: four derivatives and a normalize for a perturbation no pixel shows. Kept inside ~9 m (the dive).
+  // the relief is scaled by dAttL, 0.06 at the arrival distance: four derivatives and a normalize for a perturbation no pixel shows. Kept inside ~9 m (the dive).
   if(dAttL>0.12){
   vec3 sp=-vViewPosition;
   vec3 sx=dFdx(sp),sy=dFdy(sp);
@@ -3767,7 +3693,7 @@ if(vLUv.y<1.5){
 #if (SLICE & 256)==0
 {
   if(vLUv.y<1.5){
-    // v4.1/S-01: the custom sun response now works in ONE space — uSunV (world light-
+    // v4.1: the custom sun response now works in ONE space — uSunV (world light-
     // travel direction) is taken into view space here, matching the view-space normal,
     // so orbiting the camera no longer swims the translucency/sheen against the lights.
     vec3 sunV=normalize((viewMatrix*vec4(uSunV,0.0)).xyz);
@@ -3778,7 +3704,7 @@ if(vLUv.y<1.5){
     float thick=(1.0-lVein*0.55)*(1.0-vSen*0.30);
     // V2+V3: translucency/fill/rim summed then capped (no paper-white leaves);
     // the flat fill now tracks scene light via uEnvI (no self-lit dusk canopy)
-    /* fix-16/A4 · TRANSMITTED LIGHT IS NOT REFLECTED LIGHT. The old term
+    /* TRANSMITTED LIGHT IS NOT REFLECTED LIGHT. The old term
        multiplied the leaf's own reflected colour by a white-ish sun, so a
        backlit blade got brighter but stayed the same green — which is why the
        canopy read as opaque cards from underneath. Chlorophyll absorbs red and
@@ -3788,7 +3714,7 @@ if(vLUv.y<1.5){
     vec3 transC=vec3(1.22,1.08,0.42);
     vec3 addK=uSunC*(pow(backlit,1.5)*thick*1.22*transC+rim*0.3*backlit)+vec3((0.14+rim*0.08)*uEnvI);
     reflectedLight.indirectDiffuse+=diffuseColor.rgb*min(addK,vec3(1.05,1.0,0.8));
-    // v4.1/F-03: one coherent cuticle — the PBR response (gloss→roughness) carries the
+    // v4.1: one coherent cuticle — the PBR response (gloss→roughness) carries the
     // highlight; this is only a soft supplementary wax lobe, no isolated hot glint.
     vec3 Hn=normalize(-sunV+normalize(vViewPosition));
     float ndh=clamp(dot(normal,Hn),0.0,1.0);
@@ -3871,7 +3797,7 @@ ${NOISE_GLSL}`)
 }`)
       .replace('#include <lights_fragment_end>',`#include <lights_fragment_end>
 {
-  vec3 sunV=normalize((viewMatrix*vec4(uSunV,0.0)).xyz);   // v4.1/S-01: same space as the shading normal
+  vec3 sunV=normalize((viewMatrix*vec4(uSunV,0.0)).xyz);   // v4.1: same space as the shading normal
   float backlit=clamp(dot(normal,sunV),0.0,1.0);
   float rim=pow(1.0-abs(dot(normal,normalize(vViewPosition))),1.8);
   vec3 addK=uSunC*(pow(backlit,1.2)*0.85+rim*0.3)+vec3(0.17*uEnvI);   // V3: petal fill tracks scene light
@@ -3882,7 +3808,7 @@ ${NOISE_GLSL}`)
   return mat;
 }
 
-/* v4.1/S-01 · custom shadow-depth materials — the SAME wind deformation the visible
+/* v4.1 · custom shadow-depth materials — the SAME wind deformation the visible
    vertex shaders apply, so cast shadows track moving wood/foliage instead of staying
    frozen on the ground (the audit's "stationary cast shadows on moving geometry" gate).
    DirectionalLight shadows sample depth materials; the scene has no point lights, so
@@ -3925,7 +3851,7 @@ ${serr[0]>0?'vDUv=uv;vDLf=aLf;':''}
   float wIj=(fract(aWind.z*23.7+max(aLf,0.0)*3.1)-0.5)*step(-0.5,aLf);
   float wFl=uWind*(0.05+0.11*uv.x)*sin(uT*wFf*(0.35+0.6*uWind)+aLf*1.9+wPh);
   float wAng=wTw*0.5+wIj*0.38+wFl;
-  float sA=lfSwing(aWind,aLf),sC=cos(sA),sS=sin(sA);   // fix-16/A4, same swing as the visible blade
+  float sA=lfSwing(aWind,aLf),sC=cos(sA),sS=sin(sA);   // , same swing as the visible blade
   vec3 wAx=normalize(lfSwingRot(aAx,sC,sS));
   float wCa=cos(wAng),wSa=sin(wAng);
   vec3 P=lfSwingRot(transformed-aPO,sC,sS);
@@ -4034,20 +3960,20 @@ function buildGround(groundH,radius,uHor,soil,rootLines,em){
      press/lip sculpt a compressed-soil field around woody root contact —
      soil sinks under the contact line and shoulders up in a displaced lip
      beside it; discs bake the embed + contact darkening of placed
-     memorial objects. Deterministic: pure functions of the existing
+     landscape objects. Deterministic: pure functions of the existing
      rootLines + placements, zero rng. Absent (legacy/review scenes) the
      mesh is byte-identical to the Phase 1 ground.
      Earth & Moss carries a finer grid: the compression field, soil lip and
      object contact rings live between the legacy grid's vertices. */
   const RINGS=em?66:44,SEC=em?112:80;
-  /* Phase 5: em.style selects the memorial ground system's shader dialect
+  /* Phase 5: em.style selects the landscape ground system's shader dialect
      ('earth-moss' | 'quiet-garden' | 'wild-meadow'); em.path carries the
      approach field. With style 'earth-moss' and no path the compiled
      shader text and the vertex stream are byte-identical to Phase 3. */
   const ST=em?(em.style||'earth-moss'):null;
   const PATH=!!(em&&em.path);
   const pos=[],nor=[],uv=[],idx=[],colA=[],aRoot=[],aPathA=[],aWetA=[],aConA=[];
-  /* 3-4 I-P34-003 · the root field is not uniformly firm ground. `soft` is a
+  /* the root field is not uniformly firm ground. `soft` is a
      deterministic softness field (pure fbm of the world point — no rng, no
      seed dependence, so the same tree presses the same soil every visit): the
      contact line sinks further where the ground gives, and `pocket` marks the
@@ -4083,7 +4009,7 @@ function buildGround(groundH,radius,uHor,soil,rootLines,em){
       if(em){
         // compression: sink toward the contact line (never deeper than a
         // third of the pressing root's radius), shoulder lip beside it.
-        // I-P34-003: the depth and the lip are now LOCALIZED by the softness
+        // the depth and the lip are now LOCALIZED by the softness
         // field, so the press reads as ground responding to a root rather
         // than a constant offset stamped along every contact line.
         const soft=emSoft(x,z);
@@ -4112,7 +4038,7 @@ function buildGround(groundH,radius,uHor,soil,rootLines,em){
       if(PATH)aPathA.push(em.path.k(x,z));
       if(em)aWetA.push(wet);
       aRoot.push(em?Math.min(Math.max(sh,shMoss),1):Math.min(sh,1));
-      /* fix-16/A2 · aRoot is max(contact, moisture halo) — the halo is seven
+      /* aRoot is max(contact, moisture halo) — the halo is seven
          times wider than the bark line, which is right for feeding moss and
          useless for a contact shadow. aCon is the TIGHT contact field alone
          (plus each placed object's own bake), so the shader can darken and
@@ -4139,7 +4065,7 @@ function buildGround(groundH,radius,uHor,soil,rootLines,em){
   g.setIndex(idx);
   g.computeVertexNormals();
   const EM=em?1:0;
-  const MOB=MOBILE_PATH?1:0;   // fix-16/A10 · a cheaper soil, not a smaller one
+  const MOB=MOBILE_PATH?1:0;   // a cheaper soil, not a smaller one
   const mat=new THREE.MeshStandardMaterial({color:0xffffff,roughness:.95,metalness:0,vertexColors:true});
   mat.onBeforeCompile=sh=>{
     Object.assign(sh.uniforms,{uHor,uHorF:horFadeU,uHorC:horCamU,uSoilA:soil.uSoilA,uSoilB:soil.uSoilB,uMoist:soil.uMoist,uEco:soil.uEco,
@@ -4156,7 +4082,7 @@ uniform vec3 uHor;uniform vec2 uHorF;uniform float uHorC;uniform vec3 uSoilA;uni
 uniform float uMossA;uniform float uGravelA;
 /* Section B review 1 (2026-07-26) quality concern: under a grazing sun (Blue
    Dusk) the soil's albedo modulation and derivative relief over-contrast into
-   the periodic streak field 3-4 I-P34-003 describes — the same relief that
+   the periodic streak field describes — the same relief that
    gives daylight soil its tooth. uRelief is derived from the SCENE'S OWN sun
    elevation (1.0 for a high sun, easing toward 0.45 as the sun grazes), so
    noon keeps every bit of its texture and only low light calms down. A pure
@@ -4166,7 +4092,7 @@ float gSoilH;
 ${NOISE_GLSL}
 ${EM?GROUND_NOISE_GLSL:''}
 ${EM
-? /* 3-4 I-P34-003 · memorial ground reads through the rotated-octave 2-D field
+? /* landscape ground reads through the rotated-octave 2-D field
      (see GROUND_NOISE_GLSL, including the hypothesis rejected there). The y
      scale in each call site is now inert, which is correct: this is a ground
      plane, and a y term that barely varies buys nothing. Legacy/review scenes
@@ -4175,16 +4101,16 @@ ${EM
 #define SNOISE(p) gnoise((p).xz)`
 :`#define SFBM(p) bfbm(p)
 #define SNOISE(p) bnoise(p)`}
-float gband(float f){float w=fwidth(vGP.x)+fwidth(vGP.z);return 1.0-smoothstep(0.20,0.55,f*w);}   // v4.1/F-02: soil detail is footprint-limited`)
+float gband(float f){float w=fwidth(vGP.x)+fwidth(vGP.z);return 1.0-smoothstep(0.20,0.55,f*w);}   // v4.1: soil detail is footprint-limited`)
       .replace('#include <map_fragment>',`#include <map_fragment>
 {
   float r=length(vGP.xz);
   vec3 soil=mix(uSoilA,uSoilB,smoothstep(0.35,0.7,SFBM(vGP*vec3(2.2,4.0,2.2))));
-  // v4.1/F-02: coherent clod/grain/grit height field (each octave footprint-limited);
+  // v4.1: coherent clod/grain/grit height field (each octave footprint-limited);
   // it tints the albedo here and drives a close-range micro-normal below, so the soil
   // has physical tooth at inspection distance instead of flat colour + pixel noise.
   float clod=SFBM(vGP*vec3(3.0,5.0,3.0)+3.7);
-  /* fix-40/F1 · the band limit is exactly zero past half a cycle per footprint;
+  /* the band limit is exactly zero past half a cycle per footprint;
      a branch makes that zero free instead of a multiply. Exact where it was 0. */
   float gb18=gband(18.0),gb60=gband(60.0);
   float grain=0.0,grit=0.0;
@@ -4193,7 +4119,7 @@ float gband(float f){float w=fwidth(vGP.x)+fwidth(vGP.z);return 1.0-smoothstep(0
   gSoilH=clod*0.55+grain*0.30+grit*0.15;
   soil*=0.84+(0.16*clod+0.12*grain+0.08*grit)*uRelief;   // Section B review 1: low sun sees a calmer modulation
   float rlf=mix(0.55,1.0,uRelief);
-${EM?`  // I-P34-003 · broken clod structure: a second, much larger warped field
+${EM?`  // broken clod structure: a second, much larger warped field
   // pulls the topsoil into patches of tone so the near ground has ECOLOGY
   // (worked earth, leaf-mould, bare mineral) instead of one repeating grade.
   float clodPatch=${MOB?'gfbm(vGP.xz*0.42+61.0)':'gwarp(vGP.xz*0.42+61.0,0.9)'};   // "patch" is a GLSL ES reserved word
@@ -4204,13 +4130,13 @@ ${EM?`  // I-P34-003 · broken clod structure: a second, much larger warped fiel
 ${EM?`  // Earth & Moss: the banyan's shade builds a HUMUS APRON to the
   // dripline — dark organic topsoil, ragged-edged by growth noise, that
   // the compressed root field sits inside (a shade tree kills its lawn).
-  // fix-16/A2 · the apron edge is now ragged at METRE scale as well as at the
+  // the apron edge is now ragged at METRE scale as well as at the
   // fine scale that vanishes by twelve metres, so the arrival frame sees a
   // shade line rather than a disc.
   float humus=(1.0-smoothstep(3.2,8.6,r+(SFBM(vGP*vec3(0.9,1.4,0.9)+53.0)-0.5)*2.6
     +(clodPatch-0.5)*2.4))*0.46;
   moist=max(moist,humus);
-  // fix-16/A2 · the apron was one flat 0.5-strength wash of the darkest soil
+  // the apron was one flat 0.5-strength wash of the darkest soil
   // colour over eight metres, which is most of the arrival frame's ground and
   // most of why it carried nothing. Same apron, broken by the metre-scale patch
   // field, so it reads as leaf-mould rather than as a painted disc.
@@ -4219,7 +4145,7 @@ ${EM?`  // Earth & Moss: the banyan's shade builds a HUMUS APRON to the
 ${EM?`  // Earth & Moss: restrained mineral specks only — the broad organic
   // reading of the near field comes from the widened humus band below.
   float gb30=gband(30.0),speck=0.0;
-  if(gb30>0.0)speck=smoothstep(0.85,0.95,SNOISE(vGP*vec3(14.0,30.0,14.0)))*gb30*uEco;   // fix-40/F1 · exact where the band limit is 0
+  if(gb30>0.0)speck=smoothstep(0.85,0.95,SNOISE(vGP*vec3(14.0,30.0,14.0)))*gb30*uEco;   // exact where the band limit is 0
   ${PATH?'speck*=1.0-smoothstep(0.06,0.4,vPath);':''}
   soil=mix(soil,uSoilB*1.15,speck*0.2*smoothstep(0.6,2.2,r));`
 :`  float speck=smoothstep(0.78,0.92,SNOISE(vGP*vec3(14.0,30.0,14.0)))*gband(30.0)*uEco;
@@ -4244,10 +4170,10 @@ ${EM?`  // Phase 3 · Earth & Moss: moss seeks the HUMID PLACES — the moisture
   moss*=0.72+0.28*SNOISE(vGP*vec3(9.0,5.0,9.0));
   ${PATH?'moss*=1.0-smoothstep(0.06,0.45,vPath);   // nothing soft survives the treading':''}
   float gb22=gband(22.0),mossG=0.0;
-  if(gb22>0.0)mossG=SNOISE(vGP*22.0)*gb22;   // fix-40/F1 · exact where the band limit is 0
+  if(gb22>0.0)mossG=SNOISE(vGP*22.0)*gb22;   // exact where the band limit is 0
   vec3 mossC=(vec3(0.10,0.22,0.07)+vec3(0.10,0.15,0.06)*smoothstep(0.35,0.85,mossN))*(0.8+0.45*mossG);
   soil=mix(soil,mossC,clamp(moss,0.0,1.0)*0.92);
-${EM?`  /* fix-16/A2 · THE ARRIVAL FRAME'S BIGGEST SURFACE.
+${EM?`  /* THE ARRIVAL FRAME'S BIGGEST SURFACE.
 
      Measured on the shipped build: the ground band below the horizon carried
      detail on 25% of its pixels at golden hour and 11% at dusk, and what it
@@ -4258,14 +4184,14 @@ ${EM?`  /* fix-16/A2 · THE ARRIVAL FRAME'S BIGGEST SURFACE.
 
      So the two fields below are LOW frequency by construction: metre-scale
      patches reusing clodPatch, which is already computed, and one new 17 m
-     drift. Neither can be band-limited away at any distance the product uses,
+     drift. Neither can be band-limited away at any distance the default camera uses,
      and together they cost five noise samples.  */
   float farDrift=gfbm(vGP.xz*0.06-19.0);
   soil*=0.84+0.32*clodPatch;
   soil=mix(soil,soil*vec3(1.18,1.08,0.88),smoothstep(0.48,0.92,farDrift)*0.55);
   soil=mix(soil,soil*vec3(0.80,0.86,0.82),smoothstep(0.46,0.06,farDrift)*0.45);
 
-  /* fix-16/A2 · SOIL THAT RESPONDS TO THE ROOT FIELD.
+  /* SOIL THAT RESPONDS TO THE ROOT FIELD.
      vCon is the tight woody-contact field. Beside a root the earth is heaved
      and broken, not merely darker; the heave enters gSoilH so it lights, and
      the crook of the junction takes a real contact occlusion. This is the
@@ -4290,7 +4216,7 @@ ${ST==='wild-meadow'?`  // Wild Meadow (cultivated): a fresher green wash betwee
   ${PATH?'thatch*=1.0-smoothstep(0.08,0.5,vPath);':''}
   vec3 thatchC=vec3(0.30,0.315,0.15)*(0.82+0.42*SNOISE(vGP*vec3(6.0,14.0,6.0)));
   soil=mix(soil,thatchC,thatch*0.42);`:''}
-${ST==='stone-grove'?`  // §7C.7 · Stone & Gravel Grove: a pale, dry, raked gravel bed with a faint
+${ST==='stone-grove'?`  // Stone & Gravel Grove: a pale, dry, raked gravel bed with a faint
   // cool cast — clearly tended and contemplative, never neglected.
   float grN=SFBM(vGP*vec3(2.2,3.0,2.2)+91.0);
   float grv2=smoothstep(0.30,0.60,grN)*(1.0-smoothstep(13.5,17.5,r));
@@ -4312,7 +4238,7 @@ ${PATH?`  // the earthen approach: compacted, dust-dry trodden soil — never pa
   vec3 grav=vec3(0.79,0.77,0.72)*(0.88+0.2*bnoise(vGP*70.0)*gband(70.0))*(0.95+0.07*rake);
   grav*=1.0-0.2*smoothstep(0.5,0.95,rake);
   soil=mix(soil,grav,gw);
-${EM?`  // I-P34-003 · MOISTURE POCKETS. vWet is the same per-vertex field that
+${EM?`  // MOISTURE POCKETS. vWet is the same per-vertex field that
   // dished the mesh, so the damp patch and the hollow are the same place: a
   // darker, cooler, more saturated topsoil with a fine algal green in the
   // wettest centre, ragged-edged by the warped field rather than a disc.
@@ -4330,13 +4256,13 @@ roughnessFactor=clamp(roughnessFactor-0.15*(1.0-smoothstep(0.15,1.2,length(vGP.x
 ${EM?'roughnessFactor=mix(roughnessFactor,0.42,clamp(vWet,0.0,1.0)*0.8);   // damp soil holds a sheen dry soil never has':''}
 ${PATH?'roughnessFactor=mix(roughnessFactor,0.74,smoothstep(0.15,0.85,vPath));   // trodden earth packs smoother':''}`)
       .replace('#include <normal_fragment_maps>',MOB?'#include <normal_fragment_maps>'
-        /* fix-16/A10 · the soil micro-normal is four screen-space derivatives
+        /* the soil micro-normal is four screen-space derivatives
            and a normalize on every ground pixel, and the ground is the largest
            surface in the arrival frame. Off on the mobile path; the soil keeps
            its albedo structure, which is what survives a 1.25 dpr cap anyway. */
         :`#include <normal_fragment_maps>
 {
-  // v4.1/F-02: soil micro-normal — same derivative-relief treatment as the bark, so
+  // v4.1: soil micro-normal — same derivative-relief treatment as the bark, so
   // root/soil junctions meet two textured surfaces instead of wood-on-billiard-felt.
   vec3 sp=-vViewPosition;
   vec3 sx=dFdx(sp),sy=dFdy(sp);
@@ -4516,9 +4442,9 @@ function mergeSimple(list){   // V8: bake transforms, merge prop parts -> one dr
   geo.setIndex(new THREE.BufferAttribute(idx,1));
   return geo;
 }
-/* ================= fix-16/A7 · CUT STONE =================
+/* ================= CUT STONE =================
 
-   PROP_BUILDERS.stone and buildMemorialStoneEM were both
+   Scene rocks are
    IcosahedronGeometry(size, 2): a geodesic sphere — twelve pentagonal nodes,
    the rest hexagons, 320 faces — with fbm displacement at 4.6-6 cycles per
    unit, which is far too low-frequency to disturb a lattice at that density.
@@ -4626,7 +4552,7 @@ diffuseColor.rgb=mix(diffuseColor.rgb,vec3(0.24,0.32,0.16),smoothstep(0.55,0.85,
 }
 const PROP_BUILDERS={
   stone(def,groundH){
-    // fix-16/A7 · cut faces, not a geodesic sphere. The stream is salted from
+    // cut faces, not a geodesic sphere. The stream is salted from
     // the scene-authored position so a given scene prop is the same rock every
     // visit, and no other stream is disturbed.
     const rnd=mulberry32(((Math.round(def.x*1013)^Math.round(def.z*3571))>>>0)||7);
@@ -4800,7 +4726,7 @@ diffuseColor.rgb=mix(diffuseColor.rgb,diffuseColor.rgb*vec3(0.62,0.66,0.7),smoot
 };
 
 /* ================= Phase 3 · Earth & Moss ground system =================
-   The first complete memorial ground. Everything below is DETERMINISTIC:
+   The first complete landscape ground. Everything below is DETERMINISTIC:
    independent mulberry32 streams derived from the tree's seed (the tree's
    own rng stream is never drawn from — Banyan 863's wood/foliage checksum
    is untouched), and the placement solver is a pure fixed-order search
@@ -4810,7 +4736,7 @@ const EM_SPREAD=(seedG,salt)=>mulberry32(((seedG^salt)>>>0)||1);
 
 /** Root proximity 0..1 at (x,z) against the build's rootLines — the same
     field the ground bake uses; shared by grass/pebble placement (nothing
-    grows through a root) and the object solver (nothing collides). */
+    grows through a root) and the placement solver (nothing collides). */
 function emRootProx(x,z,rootLines){
   let sh=0;
   if(rootLines)for(let q=0;q<rootLines.length;q+=3){
@@ -4821,7 +4747,7 @@ function emRootProx(x,z,rootLines){
   return sh;
 }
 /** Clearance in world units from (x,z) to the nearest woody contact EDGE
-    (line centre minus its radius) — the object solver's honest metric. */
+    (line centre minus its radius) — the placement solver's clearance metric. */
 function emRootClearance(x,z,rootLines){
   let best=1e9;
   if(rootLines)for(let q=0;q<rootLines.length;q+=3){
@@ -4870,7 +4796,7 @@ uniform float uT;uniform float uWind;uniform vec3 uWDir;`)
 #endif`);
   };
   addHorizonMelt(mat);
-  /* 3-4 I-P34-003 · the old plan drew one tussock archetype at an even radial
+  /* the old plan drew one tussock archetype at an even radial
      density, which delivered the "thin uniform fringe". Now a deterministic
      SWARD FIELD (pure fbm of the world point — no rng, so it does not depend
      on the draw order) decides where grass actually wants to grow, and each
@@ -4893,7 +4819,7 @@ uniform float uT;uniform float uWind;uniform vec3 uWDir;`)
     const x=Math.cos(a)*r,z=Math.sin(a)*r;
     if(emRootProx(x,z,rootLines)>.22){continue}          // never through a root
     if(pathK&&pathK(x,z)>.3){continue}                   // never on the trodden core (Phase 5)
-    if(clearK&&clearK(x,z)){continue}                    // never inside a remembrance apron (Section B review 1)
+    if(clearK&&clearK(x,z)){continue}                    // never inside an excluded planting apron
     const sw=sward(x,z);
     if(R()>.14+sw*1.05)continue;                         // the sward field decides, not an even scatter
     if(r<5.2&&R()>.42)continue;                          // deep shade thins the lawn (humus apron)
@@ -4921,7 +4847,7 @@ uniform float uT;uniform float uWind;uniform vec3 uWDir;`)
       e.set(Math.cos(t.leanAz)*(t.lean+(R()-.5)*.05),R()*Math.PI*2,Math.sin(t.leanAz)*(t.lean+(R()-.5)*.05));
       q.setFromEuler(e);
       const s=.55+.5*R();
-      // I-P34-003: a clump is DOMED — tallest blades at its heart, shorter at
+      // a clump is DOMED — tallest blades at its heart, shorter at
       // the rim — so a tussock reads as one plant, not a ring of spikes.
       const dome=1.18-.42*orf*orf;
       m.compose(new THREE.Vector3(x,groundH(x,z),z),q,sc.set(s,s*t.hFam*dome*(.78+.42*R()),s));
@@ -5044,7 +4970,7 @@ function buildPebblesEM(groundH,rootLines,seedG,count){
   return mesh;
 }
 
-/* §7C.7 · a handful of low set stones for the Stone & Gravel Grove — larger
+/* a handful of low set stones for the Stone & Gravel Grove — larger
    than gravel, half-set into the ground, deterministic per seed, clear of the
    roots and the trodden path. Reads as a tended, contemplative grove. */
 function buildGroveStones(groundH,rootLines,seedG,pathK){
@@ -5057,7 +4983,7 @@ function buildGroveStones(groundH,rootLines,seedG,pathK){
     pa.setXYZ(i,x*d,y*d*.5,z*d);            // low, flattened river boulders
   }
   g.computeVertexNormals();
-  const mat=makeStoneMat(.08,.10,.5,.18);   // same stone language as the objects
+  const mat=makeStoneMat(.08,.10,.5,.18);   // same material as the landscape stones
   const N=8;
   const mesh=new THREE.InstancedMesh(g,mat,N);
   mesh.castShadow=true;mesh.receiveShadow=true;
@@ -5142,22 +5068,16 @@ diffuseColor.rgb*=0.8+0.4*bnoise(vFP*vec3(9.0,40.0,9.0));`);
   return mesh;
 }
 
-/* ================= Phase 5 · Quiet Garden · Wild Meadow · approaches ·
-   faith emblems · lantern =================
-   Same discipline as Phase 3: every stream is an independent
-   mulberry32(seed ^ salt); no Math.random; placement is fixed-order
-   search. The Earth & Moss code paths above are UNTOUCHED — with
-   (system='earth-moss', approach='none') the environment build draws the
-   byte-identical stream it always drew (witness: environmentChecksum()
-   200571ee with plate+stone, f92ef5ef bare). */
+/* ================= Landscape grounds and the earthen approach =================
+   Every stream is an independent mulberry32(seed ^ salt); no Math.random;
+   placement is a fixed-order search. Earth & Moss retains its certified
+   environment stream when the approach is 'none'. */
 
 /* ---------- the earthen approach (compacted soil, not a road) ----------
    A quadratic arc from past the fog line to an apron short of the root
    field, entering from the VISITOR frame's left or right. `anchorAz` is
-   the visitor-arrival azimuth (the Studio passes the saved view's
-   azimuth; DEFAULT_VIEW_AZ when none is saved), so "left" is left in the
-   frame the visitor will actually see. Screen-left = azimuth above the
-   camera's (same convention the Phase 3 plate placement proved).
+   view azimuth, with DEFAULT_VIEW_AZ as the default, so "left" is left
+   in that frame. Screen-left is an azimuth above the camera's.
    The field returns a HEIGHT DELTA (compaction + camber, faded to zero
    before the woody root field so the tree's own soil is never moved) and
    a CORENESS k(x,z) 0..1 that the ground shader and every planting
@@ -5168,7 +5088,7 @@ function makeApproachField(side,anchorAz,rootR,seedG){
   const azFar=anchorAz+s*(1.30+R()*.12);
   const azEnd=anchorAz+s*(.50+R()*.05);
   const rFar=30,rEnd=rootR*1.34+1.2;
-  // the bend lives INSIDE the portrait's visible ground band (the memorial
+  // the bend lives INSIDE the portrait's visible ground band (the landscape
   // melt closes ~10 u out), so the walked line visibly enters from the
   // chosen side of the visitor frame rather than from the camera's feet
   const azMid=anchorAz+s*(1.02+R()*.08),rMid=rEnd+(rFar-rEnd)*.22;
@@ -5274,17 +5194,16 @@ uniform float uT;uniform float uWind;uniform vec3 uWDir;`)
     const r=2.0+13.6*Math.pow(R(),.58);
     const x=Math.cos(a)*r,z=Math.sin(a)*r;
     if(emRootProx(x,z,rootLines)>.2)continue;             // never through a root
-    if(clearK&&clearK(x,z))continue;                      // never inside a remembrance apron (Section B review 1)
+    if(clearK&&clearK(x,z))continue;                      // never inside an excluded planting apron
     const pk=pathK?pathK(x,z):0;
     if(pk>.3)continue;                                    // never on the trodden core
     if(r<5.0&&R()>.5)continue;                            // shade thins the sward
     const fore=r<3.4?.5:r<4.8?.74:1;                      // the portrait keeps its view
     const margin=pk>.1?.62:1;                             // sparse, shorter path margin
     const n=6+Math.floor(R()*R()*15);                     // 6..20 blades
-    const leanAz=R()*Math.PI*2,lean=.10+.16*R();          // §7C.7 · a calmer lean
-    // §7C.7 · a CULTIVATED wildflower sward, not tall untended thatch. The
+    const leanAz=R()*Math.PI*2,lean=.10+.16*R();          // a calmer lean
+    // a CULTIVATED wildflower sward, not tall untended thatch. The
     // height family is roughly halved so the meadow reads as groomed and
-    // tended — never tall enough to hide the nameplate/emblem from the saved
     // view (tall untended grass reads as an abandoned grave).
     const hFam=(.50+.40*R())*fore*margin;
     const dry=R()<.12;                                    // far less straw — a tended sward
@@ -5328,7 +5247,7 @@ function buildFlowersWM(groundH,rootLines,seedG,count,windU,pathK,clearK){
   if(count<=0)return null;
   const R=EM_SPREAD(seedG,0xF10E125);
   /* One head: a thin stem quad plus THREE crossed petal planes at the tip.
-     I-P34-005 follow-through — with the program finally linking, the head that
+     follow-through — with the program finally linking, the head that
      appeared was an 8-12 cm slab on a 22 cm stalk, which reads as a signboard
      rather than an oxeye. The shader bug had hidden that for the whole of the
      wildflower feature's life. Real proportions now: a ~4 cm head on a 34 cm
@@ -5362,7 +5281,7 @@ varying vec2 vFlUv;
 uniform float uT;uniform float uWind;uniform vec3 uWDir;`)
       .replace('#include <begin_vertex>',`#include <begin_vertex>
 vTint=aTint;
-// 3-4 I-P34-005 / 5-6 F1 / 7C F3 — the head/stem cut is read from the
+// / the head/stem cut is read from the
 // geometry's own uv.y, which the FRAGMENT stage cannot see: a
 // MeshStandardMaterial with no map never defines USE_UV, so three declares
 // no vUv and the injected 'if(vUv.y<0.7)' failed to compile and killed the
@@ -5408,7 +5327,7 @@ if(vFlUv.y>=0.7)totalEmissiveRadiance+=petalRGB()*0.11;`);
     const x=Math.cos(a)*r,z=Math.sin(a)*r;
     if(emRootProx(x,z,rootLines)>.16)continue;
     if(pathK&&pathK(x,z)>.12)continue;
-    if(clearK&&clearK(x,z))continue;                      // never inside a remembrance apron (Section B review 1)
+    if(clearK&&clearK(x,z))continue;                      // never inside an excluded planting apron
     clusters.push({x,z,n:4+Math.floor(R()*8),cream:R()<.62,ph:R()*Math.PI*2});
   }
   let total=0;for(const c of clusters)total+=c.n;
@@ -5487,7 +5406,7 @@ uniform float uT;uniform float uWind;uniform vec3 uWDir;`)
     const r=1.8+12.6*Math.pow(R(),.66);
     const x=Math.cos(a)*r,z=Math.sin(a)*r;
     if(emRootProx(x,z,rootLines)>.24)continue;
-    if(clearK&&clearK(x,z))continue;            // never inside a remembrance apron (Section B review 1)
+    if(clearK&&clearK(x,z))continue;            // never inside an excluded planting apron
     const pk=pathK?pathK(x,z):0;
     if(pk>.22)continue;
     if(r<4.6&&R()>.62)continue;                 // the shade ring keeps bare earth
@@ -5527,9 +5446,8 @@ uniform float uT;uniform float uWind;uniform vec3 uWDir;`)
 
 /* ---------- Quiet Garden planting — low clipped evergreen mounds set in
    two or three quiet beds around the root field, each with a few pale
-   blossom accents. Placed by the same collision-free solver the memorial
-   objects use, AFTER them (planting defers to the plate and the chosen
-   object). ---------- */
+   blossom accents. The collision-free planting solver defers to the
+   placement sockets supplied in the occupied-position list. ---------- */
 function buildShrubsQG(groundH,rootLines,seedG,taken,pathK){
   const R=EM_SPREAD(seedG,0x0B5C0DE);
   const grp=new THREE.Group();
@@ -5640,13 +5558,13 @@ function emPlace(groundH,rootLines,pref,taken){
 const STD_PROPS=[{type:'stone',x:4.2,z:-2.9,size:.19,rot:1.2},{type:'stone',x:-5.1,z:3.7,size:.13,rot:2.8},
   {type:'log',x:7.5,z:5.9,rot:.9,len:1.4,r:.09}];   // stature: real-world prop sizes, positions pushed past the root field
 const SCENES={
- /* Phase 1 (2026-07-18): the two PUBLIC scenes became the memorial skies.
+ /* Phase 1 (2026-07-18): the two PUBLIC scenes became the landscape skies.
     `sky` = gradient dome data (fog-immune, sun-aligned bloom, dithered);
-    fix-16/A5 · horizonFade WAS [3.5, 9.5]. At the arrival distance that melts
+    horizonFade WAS [3.5, 9.5]. At the arrival distance that melts
     the ground from 23.1 m to 29.1 m of camera depth, and an eye 1.96 m above a
     45 m disc projects those six metres into about forty image rows: a dark
     ground slab, forty rows of ramp, and then flat horizon colour. That is the
-    hard line the finding describes, and it also erases most of A2's work
+    hard line the finding describes, and it also erases most of the contact-shading work
     before it reaches the frame. [0.6, 27.0] starts the melt just past the root
     field and finishes at the disc's own edge, so the ground dissolves over the
     whole visible depth instead of over one band.
@@ -5706,7 +5624,7 @@ const SCENES={
   fill:{dir:[2.6,1.4,-2.2],color:0xffffff,intensity:.5},
   soil:{a:0xdedbd4,b:0xe7e4dd,moist:0xc9c5bc,horizon:0xffffff},
   eco:0,shadow:1,props:[]},
- 'dusk':{name:'Blue Dusk',bg:0x2e3d55,fog:[0x33425c,17,50],exposure:1.0,   // §7C · a memorial dusk
+ 'dusk':{name:'Blue Dusk',bg:0x2e3d55,fog:[0x33425c,17,50],exposure:1.0,   // a landscape dusk
   sky:{top:0x24344d,horizon:0xb07a5a,bloom:0xffb877,bloomK:.5},horizonFade:[0.6,27.0],
   sun:{dir:[-2.8,.7,1.2],color:0xff9e63,intensity:2.1},   // orange sun rims the tree
   hemi:{sky:0x51678c,ground:0x32291f,intensity:.68},
@@ -5739,7 +5657,7 @@ const statsEl=document.getElementById('stats');
 const Q=new URLSearchParams(location.search);
 const REVIEW_MODE=Q.get('review')==='local'&&(location.hostname==='127.0.0.1'||location.hostname==='localhost');
 const PUBLIC_SPECIES_IDS=new Set(['banyan']);   // the public study ships the banyan; magnolia is listed as coming soon and is not selectable
-const PUBLIC_SCENE_IDS=new Set(['golden-hour','noon','dusk']);   // §7C · dusk is a memorial light
+const PUBLIC_SCENE_IDS=new Set(['golden-hour','noon','dusk']);   // dusk is a landscape light
 const reducedMotion=matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
 if(Q.get('ui')==='0')document.body.classList.add('noui');
 if(Q.get('debug')==='1')document.body.classList.add('debug');
@@ -5762,21 +5680,16 @@ let seed=Q.has('seed')?Q.get('seed'):S.seed;
 const requestedScene=Q.get('scene');
 let sceneId=requestedScene&&SCENES[requestedScene]&&(REVIEW_MODE||PUBLIC_SCENE_IDS.has(requestedScene))?requestedScene:'noon';
 let folMul=1;
-/* Phase 3 · Earth & Moss state. Only systems the renderer can truthfully
-   draw are accepted; everything else returns false so a host can never
-   show a control this renderer will not honour. The approach path is a
-   later phase: only 'none' is accepted today. */
-/* Phase 5: all three ground systems, both approaches, all four object
-   types and all six emblems are truthfully rendered — the accept-sets
-   grow accordingly. Refusal (`false`) still guards malformed input. */
-// §7C.7 · stone-grove is the new calm, dignified setting alongside the
+/* Four landscape ground systems and left/right earthen approaches are
+   supported. Placement sockets are computed for the anchor witness;
+   nothing is placed in them. Invalid ground or approach input is refused. */
+// stone-grove is the new calm, dignified setting alongside the
 // certified three; Earth & Moss stays byte-identical to its Phase-3 freeze.
 const PUBLIC_GROUND_IDS=new Set(['earth-moss','quiet-garden','wild-meadow','stone-grove']);
 const APPROACH_IDS=new Set(['none','left','right']);
 let groundId=PUBLIC_GROUND_IDS.has(Q.get('ground'))?Q.get('ground'):'earth-moss';
 let approachId=APPROACH_IDS.has(Q.get('approach'))?Q.get('approach'):'none';
-/* the visitor-arrival azimuth the approach anchors to (the Studio passes
-   the saved visitor view's azimuth; quantized for determinism) */
+/* The approach anchors to the requested view azimuth, quantized for determinism. */
 const quantAz=a=>Math.round((Number.isFinite(a)?a:.62)*50)/50;
 let approachAz=Q.has('viewAz')?quantAz(Number(Q.get('viewAz'))):.62;
 let emPathInfo=null;     // Phase 5 · approach QA: corridor clearances, end apron
@@ -5790,27 +5703,27 @@ function deepMerge(dst,src){if(!src||typeof src!=='object'||Array.isArray(src))r
   else dst[k]=src[k];}return dst}
 
 mark('pre-gl');
-/* fix-16/A10 · MSAA is a WHOLE-FRAME TILE COST on the tile-based deferred GPU
+/* MSAA is a WHOLE-FRAME TILE COST on the tile-based deferred GPU
    every phone has — it is not paid only where the edges are. The mobile path
    turns it off at the context, and turns off the alphaToCoverage that forces
    it back on (see makeLeafMaterial). Desktop is untouched. */
 const MOBILE_PATH=Qx.id==='mobile';
-/* fix-40 · SLICE: a diagnostic bitmask (?slice=<int>, default 0 = every block
+/* SLICE: a diagnostic bitmask (?slice=<int>, default 0 = every block
    on, byte-identical programs) that switches individual shader blocks off so
    a rig — or a phone with no console — can measure what each one costs. Bits:
    bark 1 macro fields · 2 twig/root close-range · 4 colonisation/mottle/scar
    · 8 relief normal; leaf 32 venation loop · 64 reticulation/age/roughness
    noise · 128 relief normal · 256 translucency/wax; soil 512 micro-normal ·
    1024 clod-patch warp + far drift · 2048 moss · 4096 humus/duff/speck/heave
-   · 8192 wet pockets · 16384 base tone/clod/grain/grit. Never a product knob:
-   the Studio forwards nothing but its own boot params. */
+   · 8192 wet pockets · 16384 base tone/clod/grain/grit. These diagnostic
+   query flags are not exposed as panel controls. */
 const SLICE=Math.max(0,parseInt(Q.get('slice')||'0',10)||0);
 const renderer=new THREE.WebGLRenderer({antialias:Q.get('aa')!=='0'&&!MOBILE_PATH,powerPreference:'high-performance'});
 mark('post-gl');
-ebBarkBakeProgramStart();   // fix-40 phone round · link the bark-bake program now; the driver compiles it while the CPU grows the tree
+ebBarkBakeProgramStart();   // link the bark-bake program now; the driver compiles it while the CPU grows the tree
 renderer.toneMapping=THREE.ACESFilmicToneMapping;
 renderer.shadowMap.enabled=Q.get('shadow')!=='0';
-/* fix-16/A3 · Qx.soft is the PCF tap radius in texels (see applyShadowFilter at
+/* Qx.soft is the PCF tap radius in texels (see applyShadowFilter at
    the top of this module). The ?shadow= override keeps working, and
    ?shadow=soft specifically pins the stock one-texel PCF_SOFT kernel so the
    before and the after can be captured from a single build. */
@@ -5847,7 +5760,7 @@ renderer.domElement.addEventListener('webglcontextlost',e=>{e.preventDefault();w
 const scene=new THREE.Scene();
 const camera=new THREE.PerspectiveCamera(46,1,.09,300);   // stature: far plane covers 6–10u trees + fog
 
-/* Phase 1 · memorial sky dome — a fog-immune gradient with a bloom aligned
+/* Phase 1 · landscape sky dome — a fog-immune gradient with a bloom aligned
    to the scene's real sun and an ordered dither against banding. Colours
    only, zero rng, zero per-frame JS cost; applyScene() feeds it from the
    active scene's `sky` data and hides it for flat-background review scenes.
@@ -5876,7 +5789,7 @@ void main(){
   scene.add(mesh);
   return mesh;
 })();
-/* Ground/eco horizon melt — memorial scenes melt by CAMERA DEPTH
+/* Ground/eco horizon melt — landscape scenes melt by CAMERA DEPTH
    (fog-style: orbit.dist + horizonFade offsets, refreshed every frame so
    zoom keeps the boundary honest); review scenes keep the legacy
    WORLD-RADIAL fade (GROUND_R 45 × .42 / × .85). uHorCam switches the
@@ -5899,7 +5812,7 @@ const sun=new THREE.DirectionalLight(0xffffff,3);
 sun.castShadow=true;
 const SHADOW_SIZE=Qx.shadow;
 sun.shadow.mapSize.set(SHADOW_SIZE,SHADOW_SIZE);
-/* fix-16/A3 · bias is a function of TEXEL SIZE, so it now scales with the
+/* bias is a function of TEXEL SIZE, so it now scales with the
    preset's map instead of being pinned to the 1024 the balanced preset happens
    to use — `high` runs 2048 and would otherwise carry twice the bias it needs.
    The +0.012 is the widened kernel's share: nine taps spread over 2.6 texels
@@ -5908,7 +5821,7 @@ sun.shadow.mapSize.set(SHADOW_SIZE,SHADOW_SIZE);
    the finding at the top of this module) and Basic does not either. */
 sun.shadow.radius=setShadowFilter();
 sun.shadow.bias=-.0012*(1024/SHADOW_SIZE);sun.shadow.normalBias=.08*(1024/SHADOW_SIZE)+.012;
-ebShadowTarget(sun,SHADOW_SIZE);   // fix-40/F2
+ebShadowTarget(sun,SHADOW_SIZE);   // 
 scene.add(sun,sun.target);
 const hemi=new THREE.HemisphereLight(0xffffff,0x444444,.6);scene.add(hemi);
 const fill=new THREE.DirectionalLight(0xffffff,.3);scene.add(fill);
@@ -5918,7 +5831,7 @@ let leafMat=null,blossomMat=null;
 
 /* build state */
 let wood=null,foliage=null,blossoms=null,fruit=null,barkMat=null,ground=null,eco=[],props=[];
-let woodDepthMat=null,leafDepthMat=null,blossomDepthMat=null;   // v4.1/S-01: wind-unified shadow materials
+let woodDepthMat=null,leafDepthMat=null,blossomDepthMat=null;   // v4.1: wind-unified shadow materials
 let groundH=null,leafBranch=null,branchMeta=[],canopyR=1.6,buildInfo={ms:0,tris:0},rootLines=null,lastSk=null;
 const GROUND_R=45;   // stature: disc edge stays past the rescaled fog — no horizon arc
 
@@ -5955,13 +5868,13 @@ function build(){
   const tWood=performance.now();
   wood=new THREE.Mesh(woodGeo,barkMat);
   wood.castShadow=true;wood.receiveShadow=true;
-  wood.customDepthMaterial=woodDepthMat=makeWoodDepthMaterial(windU);   // v4.1/S-01
+  wood.customDepthMaterial=woodDepthMat=makeWoodDepthMaterial(windU);   // v4.1
   wood.updateMatrixWorld(true);
-  ebBakeBarkFields(woodGeo,wood.matrixWorld,barkMat);   // fix-40 phone round · the five bark fields, once, on the GPU (WebGL2)
+  ebBakeBarkFields(woodGeo,wood.matrixWorld,barkMat);   // the five bark fields, once, on the GPU (WebGL2)
   scene.add(wood);
   foliage=buildFoliage(S,sk.anchors,leafMat,folMul*Qx.sprigMul,(Qx.leafDetail??1),seasonNow().tipCover??1);
   const tFol=performance.now();
-  foliage.mesh.customDepthMaterial=leafDepthMat=makeLeafDepthMaterial(S,windU);   // v4.1/S-01
+  foliage.mesh.customDepthMaterial=leafDepthMat=makeLeafDepthMaterial(S,windU);   // v4.1
   scene.add(foliage.mesh);
   leafBranch=foliage.leafBranch;
   if(foliage.centroid)canopyU.uCanC.value.copy(foliage.centroid);
@@ -5985,12 +5898,12 @@ function build(){
 function buildEnvironment(){
   disposeEco();
   const sc=SCENES[sceneId];
-  const memorialEM=!!sc.sky;   // Phase 5: every public ground system is memorial ground
-  if(memorialEM){
-    /* Phase 3 · Earth & Moss — the memorial ground; Phase 5 · Quiet
+  const landscapeGround=!!sc.sky;   // Phase 5: every public ground system is landscape ground
+  if(landscapeGround){
+    /* Phase 3 · Earth & Moss — the landscape ground; Phase 5 · Quiet
        Garden, Wild Meadow and the earthen approaches share its bones.
-       Placement first (the ground bakes each object's embed + contact
-       shadow), then soil, then the living layer. Everything deterministic
+       The ground bakes root contact, then the living layer is added.
+       Everything is deterministic
        per (species, seed, season, ground, approach, quality); the tree's
        own rng stream is never touched. With (earth-moss, none) the draw
        order below is byte-identical to the certified Phase 3 stream. */
@@ -6038,7 +5951,7 @@ function buildEnvironment(){
       const litSpec=sc.litter?Object.assign({},S.litter,sc.litter):S.litter;
       const seedN=seed;
       if(groundId==='earth-moss'){
-        // fix-16/A2 · leaf litter is the cheapest real detail the arrival frame
+        // leaf litter is the cheapest real detail the arrival frame
         // can carry, and at 1.6x it was invisible past the root mound. 2.6x.
         const litter=buildLitterEM({litter:litSpec},gH,Math.max(canopyR,1.2),seed,
           Math.round((litSpec?.count??300)*2.6*(sc.litterMul??1)*Qx.ecoMul),windU);
@@ -6046,7 +5959,7 @@ function buildEnvironment(){
         const grass=buildGrassEM(gH,rootLines,seed,
           Math.round(1350*(sc.grassMul??1)*(seasonNow().grass??1)*Qx.ecoMul),windU,pathK,grassClear);
         if(grass)eco.push(grass);
-        // fix-16/A2 · 110 pebbles over a 45 m disc is one every fourteen square
+        // 110 pebbles over a 45 m disc is one every fourteen square
         // metres, which is not a ground surface, it is a rumour of one.
         const peb=buildPebblesEM(gH,rootLines,seed,Math.round(260*(sc.pebMul??1)*Qx.ecoMul));
         if(peb)eco.push(peb);
@@ -6066,7 +5979,7 @@ function buildEnvironment(){
         if(fine)eco.push(fine);
         if(shrubPlan)eco.push(shrubPlan);
       }else if(groundId==='wild-meadow'){
-        // §7C.7 · a CULTIVATED wildflower sward: groomed low grass (see
+        // a CULTIVATED wildflower sward: groomed low grass (see
         // buildGrassWM) with deterministic wildflower clusters — tended, never
         // the tall untended thatch that reads as an abandoned grave.
         const litter=buildLitterEM({litter:litSpec},gH,Math.max(canopyR,1.2),seedN,
@@ -6076,17 +5989,16 @@ function buildEnvironment(){
           Math.round(3300*(sc.grassMul??1)*(seasonNow().grass??1)*Qx.ecoMul),windU,pathK,grassClear);
         if(sward)eco.push(sward);
         const flowers=buildFlowersWM(gH,rootLines,seedN,
-          Math.round(340*Qx.ecoMul),windU,pathK,grassClear);   // I-P34-005: a real meadow, now that the heads render
+          Math.round(340*Qx.ecoMul),windU,pathK,grassClear);   // a real meadow, now that the heads render
         if(flowers)eco.push(flowers);
         const peb=buildPebblesEM(gH,rootLines,seedN,Math.round(60*(sc.pebMul??1)*Qx.ecoMul));
         if(peb)eco.push(peb);
         const fine=buildFineRootsEM(gH,rootLines,S,seedN);
         if(fine)eco.push(fine);
       }else{
-        // §7C.7 · Stone & Gravel Grove: a calm, dignified raked-gravel bed with
+        // Stone & Gravel Grove: a calm, dignified raked-gravel bed with
         // a few low set stones and only a whisper of grass at the margins —
         // contemplative and obviously tended. Deterministic per seed, and low
-        // enough that it never hides the nameplate/emblem from the saved view.
         const litter=buildLitterEM({litter:litSpec},gH,Math.max(canopyR,1.2),seedN,
           Math.round((litSpec?.count??300)*.3*(sc.litterMul??1)*Qx.ecoMul),windU);
         if(litter)eco.push(litter);
@@ -6125,7 +6037,7 @@ function buildEnvironment(){
 function applyScene(){
   const sc=SCENES[sceneId];
   scene.background=new THREE.Color(sc.bg);
-  // Phase 1 · memorial sky: gradient dome + narrowed ground melt for scenes
+  // Phase 1 · landscape sky: gradient dome + narrowed ground melt for scenes
   // that carry `sky` data; review scenes keep the flat background + legacy fade.
   if(sc.sky){
     skyU.uTop.value.set(sc.sky.top);skyU.uHorS.value.set(sc.sky.horizon);
@@ -6159,7 +6071,7 @@ function applyScene(){
      golden hour and noon put fog within a couple of levels of sky.horizon.
      Dusk is the single scene that breaks the pattern, with efd5ae/f4ddb8 and
      e9e3d2/f1ecdd against dusk's 33425c/b07a5a, which is precisely the split
-     between the two A5 gates that passed and the one that did not.
+     between the two horizon checks that passed and the one that did not.
 
      So the invariant is stated here instead of being left to whoever authors
      the next scene, and dusk keeps its cold zenith (uTop 24344d) while its low
@@ -6173,12 +6085,12 @@ function applyScene(){
   hemi.color.set(sc.hemi.sky);hemi.groundColor.set(sc.hemi.ground);hemi.intensity=sc.hemi.intensity;
   fill.color.set(sc.fill.color);fill.intensity=sc.fill.intensity;
   fill.position.set(...sc.fill.dir);
-  /* fix-16/A5 · SECTION B FINDING 4 · THE GROUND MELTS TO THE SKY IT MEETS.
+  /* THE GROUND MELTS TO THE SKY IT MEETS.
 
      horU was `sc.soil.horizon`, authored per scene independently of the dome
      above it — so whether the horizon dissolved was down to whether someone had
      happened to author the two to agree. Golden hour did (f2dcba vs f4ddb8) and
-     noon did (f0ebdd vs f1ecdd), which is exactly why those two passed the A5
+     noon did (f0ebdd vs f1ecdd), which is exactly why those two passed the horizon
      gate and dusk did not: dusk's ground melts to 33425c, a cold slate blue,
      under a b07a5a sky. Two colours a hue apart meeting along a straight line
      is the line, and no amount of widening the fade band hides it.
@@ -6196,18 +6108,17 @@ function applyScene(){
   soilU.uSoilA.value.set(sc.soil.a);soilU.uSoilB.value.set(sc.soil.b);soilU.uMoist.value.set(sc.soil.moist);
   soilU.uEco.value=sc.eco;
   // Phase 3 · Earth & Moss carries its own restrained moss presence in the
-  // memorial scenes; review scenes keep their scene-authored amounts.
+  // landscape scenes; review scenes keep their scene-authored amounts.
   // Phase 5 · the other systems keep their own humbler moss: a tended
   // garden confines it to the trunk shade, an open meadow nearly loses it.
   soilU.uMossA.value=sc.sky
     ?(groundId==='earth-moss'?(sc.moss??.62):groundId==='quiet-garden'?.34:.20)
     :(sc.moss??0);
   soilU.uGravelA.value=sc.gravel??0;
-  /* Section B review 1 · soil relief follows the sun. A high sun (noon 0.85
+  /* soil relief follows the sun. A high sun (noon 0.85
      normalized elevation) keeps full albedo modulation and derivative relief;
      a grazing sun (Blue Dusk 0.22) eases both toward 0.45, because raking
-     light over full relief is exactly the periodic streak field the A2
-     finding describes. Smoothstep band 0.20–0.36 leaves Remembering Hour
+     light over full relief is exactly the periodic streak field described by the soil-contact finding. Smoothstep band 0.20–0.36 leaves Remembering Hour
      (0.36) at full strength — the approved hero look is untouched. */
   {
     const sd=sc.sun.dir;
@@ -6229,11 +6140,7 @@ function applyScene(){
   meetHorizon();
   fitShadows();
 }
-/* §7E.2 · lay the active skin's colour grade over the uniforms applyScene just
-   set. Runs on every applyScene; 'none' is a no-op. Pure colour, no rng, no
-   rebuild — geometry and checksum() are untouched. */
-/* fix-42 · a grade must leave the ground melt and fog meeting the graded sky.
-   Keep none/none a strict no-op, including scenes with a flat background. */
+/* The ground melt and scene fog meet the base sky at its horizon. */
 function meetHorizon(){
   if(!skyDome.visible)return;
   horU.value.copy(skyU.uHorS.value);
@@ -6271,19 +6178,15 @@ function fitCamera(force){
   const box=new THREE.Box3().setFromObject(wood);
   if(foliage&&foliage.mesh.count>0)box.expandByObject(foliage.mesh);
   const s=box.getSize(new THREE.Vector3()),c=box.getCenter(new THREE.Vector3());
-  const r=Math.hypot(s.x,s.y,s.z)*.5+.001;   // bounding-sphere radius of the box
+  const r=Math.hypot(s.x,s.y,s.z)*.5+.001;
   const asp=Math.max(.45,camera.aspect);
   const tanF=Math.tan(THREE.MathUtils.degToRad(camera.fov*.5));
   const vFit=r/tanF;
-  // v4.1/Q-02: portrait fits the CROWN WIDTH, not the whole bounding sphere over the
-  // narrow aspect — the old fit parked a small washed-out tree in a sea of sky+soil at
-  // 390×844. Slight side crop is intended (dominant-frame hero); UI containment is a
-  // CSS concern and is untouched.
   const rW=Math.max(s.x,s.z)*.5+.001;
   const hFit=asp<1?(rW*1.18)/(tanF*asp):vFit;
-  orbit.gDist=clamp(Math.max(vFit,hFit)*(S.cameraFit??.85),4,90);   // species-gated hero presence; legacy fit stays .85
+  orbit.gDist=clamp(Math.max(vFit,hFit)*(S.cameraFit??.85),4,90);
   orbit.gTgt.set(c.x*.3,Math.max(1.9,box.max.y*(asp<1?.5:.44)),c.z*.3);
-  orbit.gEl=.04;   // v4.6: begin at chest height — you look INTO (and UP at) a big tree
+  orbit.gEl=.04;
 }
 function applyOrbit(dt){
   const k=1-Math.exp(-dt*7);
@@ -6509,7 +6412,7 @@ let syncSeasonControl=()=>{};
     sun.shadow.mapSize.set(Qx.shadow,Qx.shadow);sun.shadow.radius=setShadowFilter();refreshShadowPrograms();
     sun.shadow.bias=-.0012*(1024/Qx.shadow);sun.shadow.normalBias=.08*(1024/Qx.shadow)+.012;
     sun.shadow.map&&(sun.shadow.map.dispose(),sun.shadow.map=null);
-    ebShadowTarget(sun,Qx.shadow);   // fix-40/F2
+    ebShadowTarget(sun,Qx.shadow);   // 
     sizeToStage();rebuildAll()});
   $('p-age').value=ageY;$('p-age-v').textContent=ageY;
   $('p-age').addEventListener('input',()=>{$('p-age-v').textContent=$('p-age').value});
@@ -6528,11 +6431,11 @@ function rebuildSeason(){const v={az:orbit.az,el:orbit.el,dist:orbit.dist,tgt:or
   orbit.gAz=v.gAz;orbit.gEl=v.gEl;orbit.gDist=v.gDist;orbit.gTgt.copy(v.gTgt);}
 
 /* resize */
-/* fix-40/F6 · while a finger (or a mouse) is dragging, a dense display renders
+/* while a finger (or a mouse) is dragging, a dense display renders
    at pixel ratio 1 instead of the preset's cap; motion hides the softness and
    the phone gets 1.56x fewer pixels exactly when the drag floor is measured.
-   Inert on a dpr-1 desktop. Driven by setInteracting() — the adapter infers it
-   from its own gesture entry points — and by this page's own pointer events. */
+   Inert on a dpr-1 desktop. setInteracting() is a public handle a caller may use.
+   This page's pointer events drive its camera and activity timer. */
 let interacting=false;
 function sizeToStage(){
   const w=Math.max(1,stage.clientWidth),h=Math.max(1,stage.clientHeight);
@@ -6547,14 +6450,14 @@ function setInteracting(on){
   interacting=on;
   if((devicePixelRatio||1)>1&&Qx.dpr>1)sizeToStage();
 }
-/* fix-40/F5 · IDLE CADENCE. Nothing in the loop knew whether anyone was
-   looking: a memorial page at rest drew the full frame sixty times a second
+/* IDLE CADENCE. Nothing in the loop knew whether anyone was
+   looking: a landscape page at rest drew the full frame sixty times a second
    forever, which on a phone is heat and on a laptop is the fan. When the pose
    has not changed for 400 ms the loop draws every other frame; the clocks,
    the meter (which the fill-rate guard reads) and the camera still tick every
    frame, so nothing drifts and the guard sees the true cadence. Any pose
-   change, pointer event or drag restores 60 at once. Off for stills, and
-   with ?idle=0. */
+   change, pointer event or drag restores 60 at once. Enabled only with
+   ?idle=1. */
 let lastInteractAt=performance.now();
 /* MEASURED 2026-09-03 and turned OFF by default: at half cadence the reference
    iGPU clocks down, so each drawn frame cost 21.8 ms instead of 12.6 — busy
@@ -6603,20 +6506,9 @@ applyScene();
 mark('env');
 windU.uWind.value=initialWind*(S.wind??1)*(seasonNow().wind??1);
 applyOrbit(1);
-/* fix-40/F3 · the first frame used to be ONE synchronous renderer.render() here,
-   where every program compiled — 5.7 s of a 6.6 s first visit on the reference
-   desktop, on the main thread the Studio shares, so the whole page froze for
-   it. compileAsync() links every scene program up front and, where
-   KHR_parallel_shader_compile exists (Chrome), the driver compiles on its own
-   threads while this thread stays free; the loop below draws nothing until the
-   programs report ready, so nothing stalls. Without the extension compileAsync
-   degrades to the old synchronous compile — same timing, same order. The
-   handle's stature() stays null until the first frame is drawn, so "ready" to
-   the adapter still means "a frame exists". `stills=1` (the fulfilment worker)
-   and ?compile=sync keep the old synchronous path: the worker does not care
-   about a frozen tab and must never see a ready handle before a drawn frame. */
+
 let bootCompiled=false;
-/* fix-40/F3 · WHICH PATH. Measured on the reference desktop (review/fix/40,
+/* WHICH PATH. Measured on the reference desktop (the private measurement record
    2026-09-03): the parallel path READS a warm Chrome program cache but never
    FILLS one, and a synchronous link is what fills it. So a returning visitor
    whose cache is warm is best served synchronously (0.2 s, and the cache stays
@@ -6643,11 +6535,11 @@ function ebProgramCacheWarm(){
 }
 const finishBoot=()=>{if(bootCompiled)return;mark('compiled');renderer.render(scene,camera);bootCompiled=true;mark('first-frame');
   window.__treeBootReady?.();document.getElementById('boot-status').hidden=true};
-/* fix-40/F3 · SLICED. compileAsync() gave a faster first frame (3.9 s against
+/* SLICED. compileAsync() gave a faster first frame (3.9 s against
    6.6) but it neither reads a cold cache into a warm one nor fills it, so
    every later visit stayed at 2-4 s; and a link that repeats an already-linked
    source is de-duplicated in memory and never reaches the disk cache either
-   (both measured, review/fix/40/2026-09-03). Only a genuinely cold synchronous
+   (both measured, the private measurement record). Only a genuinely cold synchronous
    link fills the cache. So a cold visit links synchronously, but one object's
    programs per animation frame with the boot overlay up, so the page is free
    between slices and the longest stall is one program, not all sixteen; and
@@ -6664,8 +6556,8 @@ function ebCompileSliced(done){
   try{renderer.compile(scene,camera)}catch(e){}
   const progs=renderer.info.programs.slice();
   let i=0;
-  /* fix-40 phone round · TIME-BUDGETED, not one-per-frame. Measured on the
-     iPhone 13 (review/fix/40/2026-09-03/phone/BENCH-PAIR.md): its driver
+  /* TIME-BUDGETED, not one-per-frame. Measured on the
+     iPhone 13 (the private measurement record): its driver
      compiled all seventeen programs inside the pre-40 synchronous first frame
      in ~0.35 s, but this loop then spent sixteen animation frames reading one
      status each — ~0.5 s of pure sequencing at a 30–40 fps boot cadence — and
@@ -6712,7 +6604,7 @@ function statureProbe(){
   const rootP=q=>rootRad.length?rootRad[Math.min(rootRad.length-1,Math.round(q*(rootRad.length-1)))]:null;
   let folMin=1e9,folMax=-1e9,strandMin=1e9,nStr=0;
   const N=foliage?foliage.mesh.count:0,ma=N?foliage.mesh.instanceMatrix.array:null;
-  const folRad=[];   // Phase 1: crown-width percentiles for the memorial-portrait fit
+  const folRad=[];   // Phase 1: crown-width percentiles for the landscape-portrait fit
   for(let i=0;i<N;i++){
     const y=ma[i*16+13],kind=sk.branches[leafBranch[i]]?String(sk.branches[leafBranch[i]].kind):'';
     if(kind==='strand'){nStr++;if(y<strandMin)strandMin=y;continue}
@@ -6894,7 +6786,7 @@ if(REVIEW_MODE){
 const clock=new THREE.Clock();
 let fpsA=60,lastStats=0,idleNow=false,idleFrame=0;
 renderer.setAnimationLoop(()=>{
-  if(document.hidden||!bootCompiled){clock.getDelta();return}   // fix-40/F3 · no frame before the programs are ready
+  if(document.hidden||!bootCompiled){clock.getDelta();return}   // no frame before the programs are ready
   const dt=Math.min(clock.getDelta(),.1);
   windU.uT.value+=dt;
   fpsA+=(1/Math.max(dt,1e-4)-fpsA)*.05;
@@ -6947,11 +6839,7 @@ window.v3=window.banyan={
   loadSpec(){console.warn('[v5] runtime spec loading is disabled in the public build');return false},
   rebuild(){rebuildAll()},
   checksum,
-  /* Phase 3 · Earth & Moss public surface (RENDERER_EXTENSION_SPEC §1–2);
-     Phase 5 · all three ground systems, both earthen approaches, faith
-     emblems and the lantern render truthfully. Malformed input still
-     returns false so a host can never show a control this build will not
-     honour. */
+  /* Ground systems and earthen approaches; malformed input returns false. */
   setGround(o){
     if(!o||typeof o!=='object')return false;
     const sys=o.system??groundId,app=o.approach??approachId;
@@ -7011,10 +6899,9 @@ window.v3=window.banyan={
       const st=statureProbe()||{};
       for(const k of['totalH','reach','firstBranchY','crownR50','crownR90','crownR98','rootR90','groundY0','crownBottomY'])
         s.mix(q(st[k]??0));
-      // object placement sockets: the four canonical stone solutions + the
-      // plate solution, solved fresh from the frozen inputs (state
-      // untouched; no environment rebuild — the sweep reads these instead
-      // of driving setMemorialObject)
+      // Canonical placement sockets are computed from frozen inputs for the
+      // anchor-geometry witness; no state change, rebuild or placement.
+      // socketDetail.plate is anchor geometry covered by that witness.
       const k2=F();
       const socketDetail={stones:{}};
       {

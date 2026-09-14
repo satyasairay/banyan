@@ -84,8 +84,8 @@ bytes on Windows and Linux. You do not have to trust the shipped file; check it.
 
 | File | SHA-256 (LF-normalized content) |
 |---|---|
-| `banyan_v5.html` | `2d0f372c60c519098cbb427f4d05d0d2262357c3f79bd6f66c231b86f1a10a50` |
-| `banyan_v5.source.html` | `d32c68e904b7dd3e381caf5701d9ca8d034b012617ad2ea636a602a34af0e6b3` |
+| `banyan_v5.html` | `af575f54e63da607e333486b1952042c4d8f4a0ed1586a5c79bf41629c224fb6` |
+| `banyan_v5.source.html` | `a40bd8d19edea0c7dc423476989776ef024017a86e909ba9ba0710f54d8ecb2d` |
 
 ## The evolution
 

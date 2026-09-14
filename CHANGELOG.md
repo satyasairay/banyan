@@ -1,5 +1,14 @@
 # Changelog
 
+## [study-5] — 2026-09-14 — describe the study, landscape and standalone tools
+
+- The source describes landscape scenery, computed placement sockets and the standalone page. Private work-item labels are removed from comments.
+- LF-normalised source SHA-256: `a40bd8d19edea0c7dc423476989776ef024017a86e909ba9ba0710f54d8ecb2d`.
+  LF-normalised runtime SHA-256: `af575f54e63da607e333486b1952042c4d8f4a0ed1586a5c79bf41629c224fb6`.
+  `npm run check`: IDENTICAL. Fresh witness: all ten balanced Gold seeds reproduce.
+
+Earlier entries below describe their historical builds.
+
 ## [study-4] — 2026-09-14 — refuse memorial rendering, delete the paid looks and remove the font request
 
 - Memorial content and its font request are removed. Shared source regions also remove the paid-look implementation; the base sky and horizon remain. The capabilities object names no refused catalogue.
