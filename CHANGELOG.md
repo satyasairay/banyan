@@ -1,5 +1,14 @@
 # Changelog
 
+## [study-19] — 2026-09-14 — the first study entry names the build it describes
+
+- The first study entry describes the capabilities of that historical build. The source is unchanged. The build is reproduced and its records and ten-seed witness are refreshed.
+- LF-normalised source SHA-256: `3705dea731fe7bdecc335dbd53d24cadd71fc5b31d29bef81f53f7a5824ece4e`.
+  LF-normalised runtime SHA-256: `7d8fa7c9d4626c78c6753ad02320084062befd7a1f34e94be4a765cb0a15730e`.
+  `npm run check`: IDENTICAL.
+
+Earlier entries below describe their historical builds.
+
 ## [study-18] — 2026-09-14 — two diagnostic warnings drop their work-item labels
 
 - The shadow-kernel and bark-bake warnings use descriptive labels; the two warning labels are the only executable changes.
@@ -199,7 +208,7 @@ private project archive and are not public.
   hash-stamped), readable source, vendored three.js, gold-seed catalogue with
   preview images and geometry checksums.
 - The faith-emblem remembrance objects are not present in this public build;
-  the runtime's `capabilities.refusedObjects` records them as refused.
+  that build's `capabilities.refusedObjects` records them as refused.
 - The former July-era library build (`src/` modules, ESM bundle, examples) is
   retired from this repository; the earlier single-file artifacts remain below
   as the engine's evolution history.
