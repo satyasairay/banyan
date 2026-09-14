@@ -4,9 +4,11 @@ A procedural banyan tree study for three.js.
 
 Everything is grown from code: trunk, aerial prop roots, bark, leaves, ground,
 grass, litter, light. No models, no textures, no downloaded assets. A tree is a
-32-bit seed, and the same seed grows the same tree on every machine, every
-time. Determinism is the point: a tree you can link to is a tree that still
-exists tomorrow.
+32-bit seed. Geometry is certified at `balanced`; `auto` chooses a detail
+tier for the screen, and different tiers have different mesh counts. Bark
+fields are baked on the viewer's GPU while the tree is built, so geometry
+determinism is not a promise of identical shading on every machine. A seed
+keeps the tree's identity reproducible at the same certified settings.
 
 ![Banyan, close — bark and canopy grown from a seed](docs/images/hero-banyan-closeup.jpg)
 
@@ -91,6 +93,67 @@ recorded in [gold/gold-banyan-1.json](gold/gold-banyan-1.json) with geometry
 checksums — so a certified tree can be verified, not just admired. Seed `863`
 ("Sheltering") and seed `1653` ("Single Bough") are good places to start.
 
+### Verify a Gold tree
+
+Serve this repository on localhost (for example, `python -m http.server 8000`),
+open [this seed-863 configuration](banyan_v5.html?seed=863&quality=balanced&species=banyan&season=live&scene=golden-hour&ground=earth-moss&wind=0),
+and run this in that page's browser console. The snippet explicitly fetches
+verification files; the runtime itself does not make those requests. It checks
+the current build's LF-normalised SHA-256 and prints the four digests against
+the manifest and its linked ten-seed witness. The manifest's tree `checksum`
+field is the **combined geometry digest**, distinct from `banyan.checksum()`.
+
+```js
+(async () => {
+  const required = {seed:'863', quality:'balanced', species:'banyan',
+    season:'live', scene:'golden-hour', ground:'earth-moss', wind:'0'};
+  const params = new URLSearchParams(location.search);
+  for (const [key, value] of Object.entries(required)) {
+    if (params.get(key) !== value) throw Error(`Open the linked configuration: ${key}=${value}`);
+  }
+  const get = async path => {
+    const response = await fetch(path, {cache:'no-store'});
+    if (!response.ok) throw Error(`${path}: HTTP ${response.status}`);
+    return response;
+  };
+  const manifest = await (await get('gold/gold-banyan-1.json')).json();
+  const build = manifest.currentBuild;
+  const text = (await (await get(build.file)).text()).replace(/\r\n/g, '\n');
+  const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  const sha256 = [...new Uint8Array(bytes)].map(x => x.toString(16).padStart(2,'0')).join('');
+  console.log('Current build SHA-256 (LF)', sha256);
+  if (sha256 !== build.sha256.toLowerCase()) throw Error('Build hash mismatch');
+  const witness = await (await get(build.witness)).json();
+  const gold = manifest.trees.find(t => t.seed === 863);
+  const row = witness.rows.find(t => t.seed === 863 && t.preset === 'balanced');
+  if (!gold || !row) throw Error('Missing seed-863 evidence');
+  const deadline = performance.now() + 120000;
+  while (!window.banyan?.stature() || !document.getElementById('boot-status')?.hidden) {
+    if (performance.now() > deadline) throw Error('Tree readiness timed out');
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  const b = window.banyan, g = b.geometry.report();
+  const state = b.stats();
+  for (const key of ['seed','quality','species','season','scene','ground']) {
+    if (String(state[key]) !== required[key]) throw Error(`Tree state changed: ${key}`);
+  }
+  if (row.combined !== gold.checksum || row.anchors !== gold.anchorsChecksum)
+    throw Error('Manifest and witness disagree');
+  const expected = {checksum:row.checksum, combined:gold.checksum,
+    anchors:gold.anchorsChecksum, environment:row.env};
+  const actual = {checksum:b.checksum(), combined:g.combined,
+    anchors:g.anchors, environment:b.environmentChecksum()};
+  console.table(Object.keys(expected).map(digest => ({digest,
+    expected:expected[digest], actual:actual[digest], match:actual[digest] === expected[digest]})));
+  if (Object.keys(expected).some(k => actual[k] !== expected[k])) throw Error('Gold digest mismatch');
+  console.log('PASS: build hash and four Gold digests');
+})();
+```
+
+`checksum()` is a 32-bit sampled tripwire over quantised geometry values, not a
+proof of identical geometry. The witness records its browser and GPU; a
+cross-machine claim needs that machine's own run.
+
 ## Reproducible build
 
 `banyan_v5.source.html` is the readable source: one HTML file, the engine in a
@@ -106,6 +169,8 @@ npm run check     # rebuilds in memory, compares byte-for-byte
 The build LF-normalizes the source, bundles with a pinned esbuild, and stamps
 the source hash into the runtime header — one clean build produces the same
 bytes on Windows and Linux. You do not have to trust the shipped file; check it.
+The SHA-256 rows below hash LF-normalised text: convert CRLF to LF before
+hashing a checkout; a raw CRLF file hash will differ.
 
 | File | SHA-256 (LF-normalized content) |
 |---|---|
@@ -119,7 +184,7 @@ complete single-file artifacts from each earlier stage, kept as they were.
 `banyan_v5.html` is the current stage, as it matured in production through
 August 2026.
 
-## What this build does not include
+## Public boundary
 
 Working use case: [everbanyan.com](https://www.everbanyan.com), a living tree
 memorial for pets, is where this renderer grew and where it runs in production. Its

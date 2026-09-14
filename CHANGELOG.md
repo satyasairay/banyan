@@ -1,5 +1,14 @@
 # Changelog
 
+## [study-9] — 2026-09-14 — make verification and determinism claims testable
+
+- Make verification and determinism claims testable.
+- LF-normalised source SHA-256: `a40bd8d19edea0c7dc423476989776ef024017a86e909ba9ba0710f54d8ecb2d`.
+  LF-normalised runtime SHA-256: `af575f54e63da607e333486b1952042c4d8f4a0ed1586a5c79bf41629c224fb6`.
+  `npm run check`: IDENTICAL. Fresh witness: all ten balanced Gold seeds reproduce.
+
+Earlier entries below describe their historical builds.
+
 ## [study-8] — 2026-09-14 — qualify performance measurements
 
 - Qualify performance measurements.
