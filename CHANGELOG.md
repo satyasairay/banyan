@@ -1,5 +1,14 @@
 # Changelog
 
+## [study-4] — 2026-09-14 — refuse memorial rendering, delete the paid looks and remove the font request
+
+- Memorial content and its font request are removed. Shared source regions also remove the paid-look implementation; the base sky and horizon remain. The capabilities object names no refused catalogue.
+- LF-normalised source SHA-256: `d32c68e904b7dd3e381caf5701d9ca8d034b012617ad2ea636a602a34af0e6b3`.
+  LF-normalised runtime SHA-256: `2d0f372c60c519098cbb427f4d05d0d2262357c3f79bd6f66c231b86f1a10a50`.
+  `npm run check`: IDENTICAL. Fresh witness: all ten balanced Gold seeds reproduce.
+
+Earlier entries below describe their historical builds.
+
 ## [study-3] — 2026-09-08 — the horizon meets the graded sky
 
 Colour only. No geometry, no rng, no shader change; `?skin=` and `?weather=`
@@ -14,13 +23,10 @@ reproduce their four digests on the same hardware.
 - The composed sky uniforms of an active skin are capped at 0.92 in linear light
   so the dome's additive sun bloom keeps headroom; Soft Dawn stops clipping its
   red channel over the lower sky.
-- The public build no longer offers the palettes or the weathers: `PUBLIC_SKIN_IDS` and
-  `PUBLIC_WEATHER_IDS` are empty, `?skin=` and `?weather=` fall back to the base look,
-  `capabilities` reads `skin:0, weather:0`, and the gallery's mist entry is withdrawn. The
-  light grades and the weathers are the product's paid enhancements, not part of this
-  study; the seam fix above stays in the source for the product's sake.
-- Source `D3CE5E7C…`, runtime `35004159…`, byte-for-byte on `--check`. Ported
-  from the EverBanyan product at 67c1579 (Prompt 42).
+- Palettes and weathers were removed from the study surface in this release;
+  their implementation was retained at that time. The later study-14 entry
+  records its deletion. The base sky and horizon alignment remain.
+- Source `D3CE5E7C…`, runtime `35004159…`, byte-for-byte on `--check`. The historical port record is retained privately.
 
 ## [study-2] — 2026-09-08 — the frame budget
 
@@ -35,9 +41,11 @@ this build, on the same hardware that certified the previous one.
   WebGL2, in place of 64 point fetches and their RGBA unpack. The penumbra
   width is unchanged and was measured with the same metric. WebGL1 keeps the
   old filter, and so does `?hwshadow=0`.
-- Shader compilation no longer arrives as one lump before the first frame. The
-  programs compile in time-budgeted slices, or through `compileAsync` when the
-  browser's cache is cold, and the page draws nothing until they are ready.
+- Shader compilation probes the program cache. A warm probe takes the
+  synchronous first-render path; a cold probe issues the links, then reads
+  program status in time-budgeted animation-frame slices before drawing the
+  first scene. `compileAsync` is an explicit `?compile=async` diagnostic
+  override, not the default cold-cache path.
 - A drag or an orbit renders at pixel ratio 1 on a dense display and goes back
   to the preset's cap when the hand comes off (`?dragdpr=0` turns this off).
 - The five bark noise fields are baked once at build time on the GPU and stored
@@ -55,11 +63,8 @@ this build, on the same hardware that certified the previous one.
 
 Runtime `201B36553740823A7F3835064CBA00F8B52676FB3ECD02930A7474902AF22CC4`,
 source `2BEDD59174981E8D2DDB8C64A6535860B735863312A8B7EEF4BC39479A157A5D`.
-Ported from the EverBanyan product renderer at commit `c65b102` (source
-`93262D959B30DD12D6932BE49F71B2B3E9FA3357FB3B1A25CBA7E7DBFC011944`), the build live on
-everbanyan.com since 2026-09-07; `gold/gold-banyan-1.json` is byte-identical to the
-product's manifest, and the ten-seed witness on this exact file is recorded in the
-product repository at `review/fix/40/2026-09-07/banyan-port-digests/`.
+The historical port and ten-seed verification records are held in the author's
+private project archive and are not public.
 
 ## [study-1] — 2026-08-26 — the public tree study cut
 
@@ -74,6 +79,12 @@ product repository at `review/fix/40/2026-09-07/banyan-port-digests/`.
   as the engine's evolution history.
 
 ---
+
+## Retired engine history
+
+The entries below describe earlier releases and retired features, not the
+current public study's capabilities. In particular, their library modules,
+exports, examples and species catalogue are historical.
 
 All notable changes to the Banyan Engine. Format follows
 [Keep a Changelog](https://keepachangelog.com/); the banyan determinism baseline is

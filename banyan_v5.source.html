@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Living Trees V5 — procedural tree studies</title>
 <meta name="description" content="Living procedural tree studies, regenerated exactly from their seed.">
@@ -354,7 +355,7 @@ function shadowFilterRadius(k){return Math.min(SHADOW_RADIUS_MAX,Math.max(0,+k||
    can widen the footprint on a bigger map without paying per frame. */
 const EB_HW_SHADOW_UNIFORM='uEbShadowDepth';
 let hwShadowInstalled=false;
-function installShadowTent(r,hw=false,taps=4,step=1.0,pcss=false){
+function installShadowTent(r,hw=false,taps=4,step=1.0){
   hwShadowInstalled=false;
   if(r<=1&&!hw){THREE.ShaderChunk.shadowmap_pars_fragment=SHADOW_CHUNK_PRISTINE;return true}
   const A='#elif defined( SHADOWMAP_TYPE_PCF_SOFT )',B='#elif defined( SHADOWMAP_TYPE_VSM )';
@@ -366,32 +367,10 @@ function installShadowTent(r,hw=false,taps=4,step=1.0,pcss=false){
   }
   if(hw){
     const N=Math.max(2,Math.min(8,taps|0)),c=((N-1)/2).toFixed(2),st=Number(step).toFixed(2);
-    /* still tier · contact hardening. A blocker search on Three's packed map
-       (still bound beside the depth texture) gives the mean occluder depth;
-       the receiver-to-blocker distance in metres times the sun's angular
-       radius (~0.27 deg, tan 0.0047) is the penumbra half-width, which sets
-       the tap spacing per pixel: a canopy 8 m up spreads to ~37 mm, a pebble
-       5 cm up stays sharp. uEbShadowWorld = (frustum width m, depth range m). */
-    const search=pcss?`
-			{
-				float dR = shadowCoord.z; float sB = 0.0; float nB = 0.0;
-				for ( int j = -2; j <= 2; j ++ ) {
-					for ( int i = -2; i <= 2; i ++ ) {
-						float d = unpackRGBAToDepth( texture2D( shadowMap, shadowCoord.xy + vec2( float( i ), float( j ) ) * texelSize * 3.0 ) );
-						if ( d < dR - 0.0004 ) { sB += d; nB += 1.0; }
-					}
-				}
-				if ( nB > 0.5 ) {
-					float dz = ( dR - sB / nB ) * uEbShadowWorld.y;
-					float halfW = dz * 0.0047;
-					float texelM = uEbShadowWorld.x * texelSize.x;
-					ebStep = clamp( halfW / max( texelM, 1e-6 ) / 3.5, 0.35, 4.0 );
-				}
-			}`:'';
     const kern=`
 			vec2 texelSize = vec2( 1.0 ) / shadowMapSize;
 			float wsum = 0.0;
-			float ebStep = ${st};${search}
+			float ebStep = ${st};
 			shadow = 0.0;
 			for ( int sy = 0; sy < ${N}; sy ++ ) {
 				for ( int sx = 0; sx < ${N}; sx ++ ) {
@@ -403,7 +382,7 @@ function installShadowTent(r,hw=false,taps=4,step=1.0,pcss=false){
 			}
 			shadow = wsum > 0.0 ? shadow / wsum : 1.0;
 		`;
-    THREE.ShaderChunk.shadowmap_pars_fragment='uniform highp sampler2DShadow '+EB_HW_SHADOW_UNIFORM+';\n'+(pcss?'uniform vec2 uEbShadowWorld;\n':'')+src.slice(0,i+A.length)+kern+src.slice(j);
+    THREE.ShaderChunk.shadowmap_pars_fragment='uniform highp sampler2DShadow '+EB_HW_SHADOW_UNIFORM+';\n'+src.slice(0,i+A.length)+kern+src.slice(j);
     hwShadowInstalled=true;
     return true;
   }
@@ -440,13 +419,7 @@ function applyShadowFilter(renderer,k){
      its control tested the candidate against itself. */
   // fix-40/F2 · the widened kernel (r > 1) runs on hardware compare wherever WebGL2 allows it
   const hw=r>1&&renderer.capabilities.isWebGL2&&Q.get('hwshadow')!=='0';
-  /* still tier: the 4096 map with the 8x8 kernel at 2-texel steps ships; the
-     PCSS blocker search is opt-in (?pcss=1) — at the memorial pose the root
-     contact sits in the canopy's umbra and the junction darkening is the
-     shader's own occlusion term, so it was nearly invisible, and its 25 extra
-     fetches per pixel over 8.3 Mpx are real minutes on the VPS's software GL. */
-  const still=hw&&captureStill;
-  shadowTentInstalled=installShadowTent(r,hw,still?8:4,still?2.0:1.0,still&&Q.get('pcss')==='1')&&r>1;
+  shadowTentInstalled=installShadowTent(r,hw,4,1.0)&&r>1;
   renderer.shadowMap.type=THREE.PCFSoftShadowMap;
   window.__ebShadowRadiusTexels=r;   // QA: the radius actually in force, readable from a probe
   window.__ebShadowHw=hwShadowInstalled;   // QA: hardware compare in force
@@ -465,7 +438,6 @@ function applyShadowFilter(renderer,k){
    target's depth texture itself when the target changes size, so the same
    object survives a preset change. */
 let ebShadowDepthTex=null;
-const ebShadowWorldU={value:new THREE.Vector2(19.56,79.5)};   // (frustum width m, depth range m) — fitShadows keeps it current
 function ebShadowTarget(light,size){
   if(!hwShadowInstalled)return;
   if(light.shadow.map){light.shadow.map.dispose();light.shadow.map=null}
@@ -478,7 +450,7 @@ function ebShadowTarget(light,size){
     // every lit material built after this line receives the sampler; Three clones
     // ShaderLib uniforms per material but keeps texture references, so one object serves all
     for(const k of ['standard','physical','lambert','phong','basic','toon']){
-      const lib=THREE.ShaderLib[k];if(lib&&lib.uniforms){lib.uniforms[EB_HW_SHADOW_UNIFORM]={value:ebShadowDepthTex};lib.uniforms.uEbShadowWorld=ebShadowWorldU}
+      const lib=THREE.ShaderLib[k];if(lib&&lib.uniforms){lib.uniforms[EB_HW_SHADOW_UNIFORM]={value:ebShadowDepthTex}}
     }
   }
   const rt=new THREE.WebGLRenderTarget(size,size,{minFilter:THREE.NearestFilter,magFilter:THREE.NearestFilter,depthTexture:ebShadowDepthTex});
@@ -2812,7 +2784,7 @@ function bakeBarkAtlas(renderer){
     minFilter:THREE.LinearMipmapLinearFilter,magFilter:THREE.LinearFilter,
     generateMipmaps:true,depthBuffer:false,stencilBuffer:false,
     colorSpace:THREE.NoColorSpace});   // this is DATA, not colour
-  rt.texture.anisotropy=Math.min(captureStill?16:8,renderer.capabilities.getMaxAnisotropy());
+  rt.texture.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());
   const quad=new THREE.Mesh(new THREE.PlaneGeometry(2,2),new THREE.RawShaderMaterial({
     vertexShader:`precision highp float;
 attribute vec3 position;attribute vec2 uv;varying vec2 vUv;
@@ -3060,9 +3032,7 @@ function makeBarkMaterial(S,windU){
       uCrev:{value:new THREE.Vector3(...Bk.crevice)},uRidge:{value:new THREE.Vector3(...Bk.ridge)},
       uLentic:{value:new THREE.Vector3(...(Bk.lenticel||[.42,.36,.33]))},
       uBarkTex:{value:bakeBarkAtlas(renderer)},
-      uSunV:canopyU.uSunV,   // fix-16/A13 · which side of the limb the light is on
-      uSkinMul:premiumLookU.uSkinMul,uSkinAmount:premiumLookU.uSkinAmount,
-      uRain:premiumLookU.uRain
+      uSunV:canopyU.uSunV,   // which side of the limb the light is on
     });
     sh.vertexShader=sh.vertexShader
       .replace('#include <common>',`#include <common>
@@ -3113,7 +3083,6 @@ varying vec3 vWP;varying vec2 vBUv;varying vec4 vInfo;varying vec3 vTan;varying 
 varying vec4 vColony;varying float vMott;   // fix-40/F1 · lichen colony tint, alga, streak mask, moisture; warm mottle
 uniform sampler2D uBarkTex;uniform vec3 uSunV;uniform float uBump;uniform float uStria;uniform float uMottle;
 uniform vec3 uCrev;uniform vec3 uRidge;uniform vec3 uLentic;
-uniform vec3 uSkinMul;uniform float uSkinAmount;uniform float uRain;
 float gH;float gLent;
 float bFoot;float bNear;vec3 bTl;float bAlong;
 /* fix-16/A1 · gFine is the part of the height field that must NOT reach the
@@ -3493,15 +3462,14 @@ float lenticels(){
   vec3 aerC=vec3(0.52,0.38,0.26);
 #endif
   bark=mix(bark,aerC,aer*0.9);
-  bark*=mix(vec3(1.0),vec3(0.62,0.71,0.78),uRain*0.68);
-  diffuseColor.rgb=bark*mix(vec3(1.0),uSkinMul,uSkinAmount);
+  diffuseColor.rgb=bark;
 }`)
       .replace('#include <roughnessmap_fragment>',`#include <roughnessmap_fragment>
 roughnessFactor=roughnessFactor-(gH-0.5)*0.3-(1.0-smoothstep(0.02,0.4,vWP.y))*0.1;
 #if BARKF==3
 roughnessFactor=roughnessFactor-0.05+gLent*0.14;   // older prunus stays mostly matte
 #endif
-roughnessFactor=mix(clamp(roughnessFactor,0.34,1.0),0.40,uRain*0.72);`)
+roughnessFactor=clamp(roughnessFactor,0.34,1.0);`)
       .replace('#include <normal_fragment_maps>',`#include <normal_fragment_maps>
 {
   vec3 sp=-vViewPosition;
@@ -3549,8 +3517,6 @@ function makeLeafMaterial(S,windU,canopyU){
       uVein:{value:new THREE.Vector3(FX.veinN??7,FX.veinCurve??.3,FX.veinTint??.45)},
       uUnderL:{value:FX.underL??1.1},
       uNeedle:{value:S.foliage.blade.outline==='needle'?1:0},
-      uSkinMul:premiumLookU.uSkinMul,uSkinAmount:premiumLookU.uSkinAmount,
-      uRain:premiumLookU.uRain
     });
     sh.vertexShader=sh.vertexShader
       .replace('#include <common>',`#include <common>
@@ -3609,7 +3575,6 @@ vLUv=uv;vLf=aLf;vSen=aSen;
 varying vec2 vLUv;varying float vLf;varying float vSen;
 uniform vec3 uSunV;uniform vec3 uSunC;uniform float uEnvI;
 uniform vec2 uSerr;uniform vec3 uVein;uniform float uUnderL;uniform float uNeedle;
-uniform vec3 uSkinMul;uniform float uSkinAmount;uniform float uRain;
 float lH;float lVein;float lDome;float lRim;
 ${NOISE_GLSL}`)
       .replace('#include <color_fragment>',`#include <color_fragment>
@@ -3769,8 +3734,6 @@ ${NOISE_GLSL}`)
     diffuseColor.rgb=c;
     }
   }
-  diffuseColor.rgb*=mix(vec3(1.0),vec3(0.75,0.84,0.90),uRain*0.44);
-  diffuseColor.rgb*=mix(vec3(1.0),uSkinMul,uSkinAmount);
 }`)
       .replace('#include <roughnessmap_fragment>',`#include <roughnessmap_fragment>
 if(vLUv.y<1.5){
@@ -3784,7 +3747,7 @@ if(vLUv.y<1.5){
 #endif
 }
 if(!gl_FrontFacing)roughnessFactor=min(1.0,roughnessFactor+0.42);
-roughnessFactor=mix(roughnessFactor,0.38,uRain*0.42);`)
+`)
       .replace('#include <normal_fragment_maps>',`#include <normal_fragment_maps>
 #if (SLICE & 128)==0
 if(vLUv.y<1.5){
@@ -4181,18 +4144,16 @@ function buildGround(groundH,radius,uHor,soil,rootLines,em){
   mat.onBeforeCompile=sh=>{
     Object.assign(sh.uniforms,{uHor,uHorF:horFadeU,uHorC:horCamU,uSoilA:soil.uSoilA,uSoilB:soil.uSoilB,uMoist:soil.uMoist,uEco:soil.uEco,
       uMossA:soil.uMossA,uGravelA:soil.uGravelA,uRelief:soil.uRelief,
-      uSkinMul:premiumLookU.uSkinMul,uSkinAmount:premiumLookU.uSkinAmount,
-      uRain:premiumLookU.uRain,uRainShelter:premiumLookU.uRainShelter});
+    });
     sh.vertexShader=sh.vertexShader
-      .replace('#include <common>','#include <common>\nvarying vec3 vGP;varying float vGD;varying float vRainOpen;uniform vec3 uRainShelter;attribute float aRoot;varying float vRoot;attribute float aCon;varying float vCon;'+(EM?'attribute float aWet;varying float vWet;':'')+(PATH?'attribute float aPath;varying float vPath;':''))
-      .replace('#include <begin_vertex>','#include <begin_vertex>\nvGP=position;vRoot=aRoot;vCon=aCon;vRainOpen=mix(1.0,0.32,1.0-smoothstep(uRainShelter.z*0.55,uRainShelter.z*0.92,length(position.xz-uRainShelter.xy)));'+(EM?'vWet=aWet;':'')+(PATH?'vPath=aPath;':''))
+      .replace('#include <common>','#include <common>\nvarying vec3 vGP;varying float vGD;attribute float aRoot;varying float vRoot;attribute float aCon;varying float vCon;'+(EM?'attribute float aWet;varying float vWet;':'')+(PATH?'attribute float aPath;varying float vPath;':''))
+      .replace('#include <begin_vertex>','#include <begin_vertex>\nvGP=position;vRoot=aRoot;vCon=aCon;'+(EM?'vWet=aWet;':'')+(PATH?'vPath=aPath;':''))
       .replace('#include <project_vertex>','#include <project_vertex>\nvGD=-mvPosition.z;');
     sh.fragmentShader=sh.fragmentShader
       .replace('#include <common>',`#include <common>
-varying vec3 vGP;varying float vGD;varying float vRainOpen;varying float vRoot;varying float vCon;${EM?'varying float vWet;':''}${PATH?'varying float vPath;':''}
+varying vec3 vGP;varying float vGD;varying float vRoot;varying float vCon;${EM?'varying float vWet;':''}${PATH?'varying float vPath;':''}
 uniform vec3 uHor;uniform vec2 uHorF;uniform float uHorC;uniform vec3 uSoilA;uniform vec3 uSoilB;uniform vec3 uMoist;uniform float uEco;
 uniform float uMossA;uniform float uGravelA;
-uniform vec3 uSkinMul;uniform float uSkinAmount;uniform float uRain;uniform vec3 uRainShelter;
 /* Section B review 1 (2026-07-26) quality concern: under a grazing sun (Blue
    Dusk) the soil's albedo modulation and derivative relief over-contrast into
    the periodic streak field 3-4 I-P34-003 describes — the same relief that
@@ -4360,18 +4321,13 @@ ${EM?`  // I-P34-003 · MOISTURE POCKETS. vWet is the same per-vertex field that
   vec3 wetC=soil*vec3(0.46,0.50,0.52);
   wetC=mix(wetC,vec3(0.085,0.135,0.075),smoothstep(0.55,0.95,wet)*0.45);
   soil=mix(soil,wetC,wet*0.85*uEco);`:''}
-  float rainGround=uRain*vRainOpen;
-  soil=mix(soil,soil*vec3(0.42,0.52,0.60),rainGround*0.78);
-  soil*=mix(vec3(1.0),uSkinMul,uSkinAmount);
   diffuseColor.rgb=mix(soil,uHor,smoothstep(uHorF.x,uHorF.y,mix(r,vGD,uHorC)));   // Phase 1: scene-driven horizon melt (world-radial or camera-depth)
 }`)
       .replace('#include <colorspace_fragment>',`gl_FragColor.rgb=mix(gl_FragColor.rgb,uHor,smoothstep(uHorF.x,uHorF.y,mix(length(vGP.xz),vGD,uHorC)));   // Phase 1: post-tonemap melt — the far field IS the horizon colour, shadows and all
-gl_FragColor.rgb+=vec3(0.0032,0.0042,0.0052)*uRain*vRainOpen*(0.55+0.45*smoothstep(0.05,0.85,gSoilH+0.5));
 #include <colorspace_fragment>`)
       .replace('#include <roughnessmap_fragment>',`#include <roughnessmap_fragment>
 roughnessFactor=clamp(roughnessFactor-0.15*(1.0-smoothstep(0.15,1.2,length(vGP.xz))),0.6,1.0);
-${EM?'roughnessFactor=mix(roughnessFactor,0.42,clamp(vWet,0.0,1.0)*0.8);   // I-P34-003: damp soil holds a sheen dry soil never has':''}
-roughnessFactor=mix(roughnessFactor,0.34,uRain*vRainOpen*0.78);
+${EM?'roughnessFactor=mix(roughnessFactor,0.42,clamp(vWet,0.0,1.0)*0.8);   // damp soil holds a sheen dry soil never has':''}
 ${PATH?'roughnessFactor=mix(roughnessFactor,0.74,smoothstep(0.15,0.85,vPath));   // trodden earth packs smoother':''}`)
       .replace('#include <normal_fragment_maps>',MOB?'#include <normal_fragment_maps>'
         /* fix-16/A10 · the soil micro-normal is four screen-space derivatives
@@ -4434,7 +4390,7 @@ function buildLitter(S,groundH,canopyR,eRng,count,windU){
   addHorizonMelt(mat);   // Phase 1: litter dissolves with the melted soil
   const mesh=new THREE.InstancedMesh(g,mat,N);
   mesh.receiveShadow=true;
-  mesh.castShadow=captureStill;   // fix-40 · still tier: a 4.8 mm texel can carry a leaf's shadow; a 19 mm one could not
+  mesh.castShadow=false;
   const m=new THREE.Matrix4(),q=new THREE.Quaternion(),e=new THREE.Euler(),sc=new THREE.Vector3(),col=new THREE.Color();
   for(let i=0;i<N;i++){
     const u=eRng(),a=eRng()*Math.PI*2;
@@ -5645,90 +5601,9 @@ diffuseColor.rgb=mix(diffuseColor.rgb,diffuseColor.rgb*vec3(1.12,1.18,0.9),smoot
   return grp;
 }
 
-/* ---------- faith emblems: not present in this public build. The memorial
-   product carries them behind its own review obligation; this study renders
-   trees, stones and lanterns only. The null stub keeps the object dispatch
-   valid; the accept-sets below never let it run. ---------- */
-function buildFaithEmblemEM(){return null}
-
-/* ---------- the simple lantern — a small stone lantern that carries a
-   restrained warm flame in the remembering hour and stands quiet at
-   noon. Same stone language as the other memorial objects. ---------- */
-function buildLanternEM(def,groundH,seedG,lit){
-  const R=EM_SPREAD(seedG,0x1AB7E12);
-  const grp=new THREE.Group();
-  const sM=makeStoneMat(.08,.09,.45,.22);
-  const stoneG=[];
-  const mk=(geo,y)=>{geo.translate(0,y,0);stoneG.push(geo)};
-  mk(new THREE.CylinderGeometry(.115,.15,.06,10),.03);      // plinth
-  mk(new THREE.CylinderGeometry(.042,.056,.21,10),.165);    // shaft
-  mk(new THREE.CylinderGeometry(.092,.06,.05,10),.295);     // collar
-  mk(new THREE.BoxGeometry(.118,.108,.118),.372);           // firebox
-  mk(new THREE.ConeGeometry(.135,.085,6),.468);             // roof
-  mk(new THREE.SphereGeometry(.028,8,6),.535);              // crown
-  const stone=new THREE.Mesh(mergeSimple(stoneG),sM);
-  stone.castShadow=stone.receiveShadow=true;
-  grp.add(stone);
-  const winG=[];
-  for(let k=0;k<4;k++){
-    const w=new THREE.PlaneGeometry(.054,.062);
-    const a=k*Math.PI/2;
-    w.rotateY(a);w.translate(Math.sin(a)*.0605,.372,Math.cos(a)*.0605);
-    winG.push(w);
-  }
-  const winM=lit
-    ?new THREE.MeshStandardMaterial({color:0x2a1608,roughness:.9,
-       emissive:new THREE.Color(0xffb35c),emissiveIntensity:1.5})
-    :new THREE.MeshStandardMaterial({color:0x241811,roughness:.95});
-  const wins=new THREE.Mesh(mergeSimple(winG),winM);
-  grp.add(wins);
-  if(lit){
-    // a candle's reach, not a floodlight: warm, short falloff, no shadow pass
-    const glow=new THREE.PointLight(0xffc27a,.85,3.6,2);
-    glow.position.set(0,.372,0);
-    grp.add(glow);
-  }
-  grp.userData.lanternWins=wins;
-  const y0=groundH(def.x,def.z);
-  grp.position.set(def.x,y0-(def.embed??.03),def.z);
-  grp.rotation.y=def.faceAz??(R()*Math.PI*2);
-  grp.userData.label='simple lantern';
-  grp.userData.em={kind:'lantern',x:def.x,z:def.z,r:.16,embed:def.embed??.03};
-  return grp;
-}
-
-/* ---------- memorial object placement (sockets, not transforms) ---------- */
-
-/* 5-6 F2 · THE ONE PLACEMENT COLLISION SET.
-   Every placed thing registers two radii in `taken`:
-     r     — the courtesy SEPARATION that keeps unrelated memorial objects
-             from crowding one another (the historical field);
-     hard  — the thing's actual plan FOOTPRINT.
-   `hard` is never negotiable. A companion piece that is DESIGNED to stand at
-   the nameplate (the grave-lamp) may waive the courtesy separation for that
-   one neighbour, but it still has to clear the stone itself — which is
-   precisely what the old direct-from-the-plate lantern placement did not do:
-   it checked roots and nothing else, so at `front-centre` the lamp stood
-   inside the nameplate. `emHardHit` is now the single answer to "does this
-   footprint overlap something already placed?" and BOTH the generic lattice
-   solve and the companion solve ask it. */
+/* Deterministic landscape placement. */
 const EM_HARD_GAP=.07;                     // a hand's width of daylight
 const emHardOf=t=>(t.hard??t.r??0);
-function emHardHit(x,z,r,taken){
-  if(!taken)return null;
-  for(const t of taken)if(Math.hypot(x-t.x,z-t.z)<emHardOf(t)+r+EM_HARD_GAP)return t;
-  return null;
-}
-/** Circumscribing plan-view disc of a nameplate shape: the slab's half width
-    (or the wider pedestal base), against its buried-toe depth plus the lean
-    the backward tilt adds. Derived from NAMEPLATE_SHAPES so a new shape can
-    never quietly escape the collision set. */
-function emPlateFootprint(shapeId){
-  const S=NAMEPLATE_SHAPES[shapeId]||NAMEPLATE_SHAPES.tablet;
-  const hw=Math.max(S.w,S.plinth>0?S.w*1.04:0)/2;
-  const hd=Math.max(S.T*S.toeT,S.plinth>0?S.T*3.0:S.T)/2+Math.abs(Math.sin(S.tilt))*S.h/2;
-  return Math.hypot(hw,hd);
-}
 /** Deterministic collision-free placement: walk a FIXED candidate lattice
     (azimuth fans × radius steps, nearest-preferred order) and take the
     first candidate with enough clearance from every woody contact line,
@@ -5760,515 +5635,6 @@ function emPlace(groundH,rootLines,pref,taken){
   return best;   // honest fallback: the least-bad candidate, flagged
 }
 
-/* §7C.6 · the COMPANION GRAVE-LAMP, solved against the same collision set.
-   Design intent is unchanged: the lamp stands just in FRONT of the engraved
-   face, a touch to the side chosen by the socket, so its candle-reach falls on
-   the writing. 5-6 F2 is what the old code got wrong — it placed the lamp
-   straight from the plate's polar coordinates with a root check and NOTHING
-   else, so at `front-centre` the 0.44 m stand-off sat inside a stone whose
-   plan footprint is ~0.65 m and the lamp grew out of the nameplate.
-   Now the lamp starts at the first stand-off that clears the plate's real
-   footprint and walks OUTWARD along the same designed bearing, asking
-   emHardHit — the shared test — at every step. It waives only the plate's
-   COURTESY separation (it is the plate's own lamp), never any footprint, and
-   falls back to the generic lattice solve if the whole bearing is blocked. */
-function emPlaceCompanionLamp(groundH,rootLines,plate,socket,taken){
-  const LAMP_R=.17;
-  const plAz=Math.atan2(plate.z,plate.x),plR=Math.hypot(plate.x,plate.z);
-  const sideAng={'front-centre':.10,'front-left':.19,'front-right':-.19,
-    'roots-left':.28,'roots-right':-.28}[socket]??.10;
-  const lanAz=plAz+sideAng;
-  const plateT=taken.find(t=>t.id==='plate');
-  const clearOfPlate=emHardOf(plateT||{r:.65})+LAMP_R+EM_HARD_GAP;
-  // start at the designed stand-off and walk outward; the explicit
-  // plate-footprint test below is what actually decides where it may stand
-  const r0=plR+.44;
-  for(let i=0;i<16;i++){
-    const r=r0+i*.085;
-    const x=Math.cos(lanAz)*r,z=Math.sin(lanAz)*r;
-    if(emRootProx(x,z,rootLines)>.24)continue;
-    if(Math.hypot(x-plate.x,z-plate.z)<clearOfPlate)continue;
-    if(emHardHit(x,z,LAMP_R,taken))continue;
-    const g0=groundH(x,z);
-    const slope=Math.max(Math.abs(groundH(x+.22,z)-g0),Math.abs(groundH(x,z+.22)-g0));
-    if(slope>.18)continue;
-    return{x,z,az:lanAz,clearance:+emRootClearance(x,z,rootLines).toFixed(3),slope:+slope.toFixed(3),
-      fallback:false,companionOf:'plate',plateGap:+Math.hypot(x-plate.x,z-plate.z).toFixed(3)};
-  }
-  // the designed bearing is blocked end to end — take an honest lattice solve
-  return emPlace(groundH,rootLines,{az0:lanAz,r0:r0,rMax:r0+1.6,clear:.2,sep:.4,
-    hard:LAMP_R,waive:['plate']},taken);
-}
-
-/* ---------- the engraved nameplate (real scene geometry) ---------- */
-
-/* The engraving speaks in the memorial's own display face. The renderer
-   loads Marcellus itself (self-hosted beside the Studio; same origin) so
-   the plate is correct on machines with NO system fonts at all — headless
-   QA containers included. Canvas text needs the font REGISTERED in
-   document.fonts; when it arrives after first build, the live face is
-   re-engraved in place (texture only — geometry, placement and the
-   environment checksum are untouched). */
-let emPlateFontReady=false,emPlateFace=null,emPlateFaceArgs=null;
-/* fix-16/A9 · the decoded portrait, and the loader that fetches it. */
-let emPlatePhotoTex=null,emPlatePhotoSrc=null;
-function emLoadPlatePhoto(src){
-  if(!src){emPlatePhotoTex=null;emPlatePhotoSrc=null;return}
-  if(emPlatePhotoSrc===src&&emPlatePhotoTex)return;
-  const img=new Image();
-  img.onload=()=>{
-    if(plateState.photo!==src)return;                 // superseded while decoding
-    /* Square, centre-cropped: 2.4 asks for a passport-style crop and makes
-       the guide an overlay rather than a rejection rule, so a wide shot must
-       still land in the recess without distortion. Cover, never stretch. */
-    const N=512,cv=document.createElement('canvas');cv.width=cv.height=N;
-    const c=cv.getContext('2d');
-    const k=Math.max(N/img.width,N/img.height);
-    const w=img.width*k,h=img.height*k;
-    c.fillStyle='#20201d';c.fillRect(0,0,N,N);
-    c.drawImage(img,(N-w)/2,(N-h)/2,w,h);
-    const t=new THREE.CanvasTexture(cv);
-    t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=4;
-    emPlatePhotoTex=t;emPlatePhotoSrc=src;
-    buildEnvironment();applyScene();
-  };
-  img.onerror=()=>{emPlatePhotoTex=null;emPlatePhotoSrc=null};   // a bad payload changes nothing
-  img.src=src;
-}
-try{
-  const ff=new FontFace('EBMarcellus',"url('../fonts/marcellus-latin-400.woff2')");
-  ff.load().then(f=>{document.fonts.add(f);emPlateFontReady=true;
-    if(emPlateFace&&emPlateFaceArgs){
-      const old=emPlateFace.material.map;
-      emPlateFace.material.map=emMakePlateTexture(emPlateFaceArgs.name,emPlateFaceArgs.dates,plateState.shape);
-      if(emPlateFace.material.map.userData.bump){emPlateFace.material.bumpMap=emPlateFace.material.map.userData.bump;emPlateFace.material.needsUpdate=true}   // fix-40 · still tier
-      emPlateFace.material.needsUpdate=true;
-      if(old)old.dispose();
-    }
-  }).catch(()=>{});
-}catch(e){/* no FontFace (very old engine) — system serif fallback below */}
-
-/* fix-16/A9 · `shape` moves the engraving DOWN on the portrait plate so the
-   name sits below the recess. The requirement is that the name does not
-   shrink to make room for the photo, so the PLATE grew instead: the portrait
-   slab is 0.92 high against the tablet's 0.50, and the name keeps the same
-   cap height in world units. Every other shape is unchanged. */
-function emMakePlateTexture(name,dates,shape){
-  const cv=document.createElement('canvas');
-  cv.width=1024;cv.height=512;
-  const c=cv.getContext('2d');
-  // fix-40 · still tier: the same drawing at twice the resolution (every coordinate below is in the 1024x512 space)
-  if(captureStill){cv.width=2048;cv.height=1024;c.scale(2,2)}
-  c.clearRect(0,0,1024,512);
-  const NM=(name||'').toUpperCase();
-  const FACE=`'EBMarcellus', Georgia, 'Times New Roman', serif`;
-  const fit=(txt,weight,max,cap)=>{let s=cap;c.font=`${weight} ${s}px ${FACE}`;
-    while(s>26&&c.measureText(txt).width>max){s-=4;c.font=`${weight} ${s}px ${FACE}`}return s};
-  // portrait: the recess occupies the top ~46% of the engraved face
-  const PORT=shape==='portrait';
-  const NAME_Y=PORT?352:202,DATE_Y=PORT?452:386,NAME_CAP=PORT?150:190;
-  c.textAlign='center';c.textBaseline='middle';
-  // engraved = incision: dark cut + a lower-edge light kiss where the sun
-  // would catch the carved bevel. Two passes, no filters (GL-safe).
-  // Phase 5 · long-name honesty: try hair-spaced; if the floor size still
-  // overflows, drop the spacing; if it STILL overflows, wrap to two lines
-  // at the kindest break. Nothing is ever clipped off the stone's edge.
-  const engrave=(txt,size,y)=>{
-    c.font=`600 ${size}px ${FACE}`;
-    c.fillStyle='rgba(255,244,218,0.55)';
-    c.fillText(txt,512,y+size*.045);
-    c.fillStyle='rgba(28,18,10,0.96)';
-    c.fillText(txt,512,y);
-  };
-  // Letterspacing is a LATIN nicety: hair-spacing a complex script
-  // (Devanagari, Arabic…) orphans its combining marks into dotted
-  // circles. Space only unambiguous simple-script names.
-  const simpleScript=/^[\u0020-\u024F\u1E00-\u1EFF\u2010-\u2019]*$/.test(NM);
-  let spaced=simpleScript?NM.split('').join(' '):NM;
-  let nameSize=fit(spaced,'600',880,NAME_CAP);
-  c.font=`600 ${nameSize}px ${FACE}`;
-  if(c.measureText(spaced).width>880||nameSize<64){
-    spaced=NM;
-    nameSize=fit(spaced,'600',880,NAME_CAP);
-    c.font=`600 ${nameSize}px ${FACE}`;
-  }
-  if((c.measureText(spaced).width>880||nameSize<64)&&NM.includes(' ')){
-    // two lines: split nearest the middle space
-    const words=NM.split(' ');
-    let best=1,bd=1e9;
-    for(let i=1;i<words.length;i++){
-      const d=Math.abs(words.slice(0,i).join(' ').length-words.slice(i).join(' ').length);
-      if(d<bd){bd=d;best=i}
-    }
-    const l1=words.slice(0,best).join(' '),l2=words.slice(best).join(' ');
-    const s2=Math.min(fit(l1,'600',880,150),fit(l2,'600',880,150));
-    engrave(l1,s2,NAME_Y-52);engrave(l2,s2,NAME_Y-52+s2*1.12);
-  }else{
-    engrave(spaced,nameSize,NAME_Y);
-  }
-  if(dates){
-    const dSize=fit(dates,'500',760,88);
-    c.font=`500 ${dSize}px ${FACE}`;
-    c.fillStyle='rgba(255,244,218,0.45)';
-    c.fillText(dates,512,DATE_Y+5+dSize*.05);
-    c.fillStyle='rgba(32,21,12,0.94)';
-    c.fillText(dates,512,DATE_Y);
-  }
-  const tex=new THREE.CanvasTexture(cv);
-  tex.colorSpace=THREE.SRGBColorSpace;
-  tex.anisotropy=captureStill?16:4;
-  /* fix-40 · still tier: the incision as RELIEF. The engraving was a dark fill
-     with a light kiss — a painted cut. From the same canvas, the alpha channel
-     is the cut's depth map (letters 0.96, the kiss 0.55, stone 0), so a bump
-     map with a negative scale sinks the letters and lets the bevel catch the
-     sun at 100 %. Live pages never load it (no bumpMap unless stills=1). */
-  if(captureStill){
-    const w=cv.width,h=cv.height,src=c.getImageData(0,0,w,h),dst=c.createImageData(w,h);
-    for(let i=0;i<w*h;i++){const a=src.data[i*4+3];dst.data[i*4]=dst.data[i*4+1]=dst.data[i*4+2]=a;dst.data[i*4+3]=255}
-    const cb=document.createElement('canvas');cb.width=w;cb.height=h;cb.getContext('2d').putImageData(dst,0,0);
-    const bump=new THREE.CanvasTexture(cb);bump.colorSpace=THREE.NoColorSpace;bump.anisotropy=16;
-    tex.userData.bump=bump;
-  }
-  return tex;
-}
-
-/* §7C.4 · four materially-distinct nameplate/plinth shapes. 'tablet' is the
-   default and is geometrically IDENTICAL to the pre-7C plate (same dims,
-   segments, tilt, softening loop). Each holds the Phase-3 legibility bar (the
-   engraved face scales with the slab) and the soil-embedding bar (a buried toe
-   footing; the pedestal adds a stepped base). The plate MESH is not part of
-   geometry.report() — only its PLACEMENT is — so adding shapes moves no
-   certified Gold checksum. */
-const NAMEPLATE_SHAPES={
-  tablet:  {w:1.25,h:.50,T:.09,tilt:-.30,top:'soft',segX:7,segY:4,toeW:.72,toeH:.14,toeT:2.4,plinth:0},
-  arch:    {w:1.14,h:.60,T:.10,tilt:-.18,top:'arch',segX:7,segY:8,toeW:.64,toeH:.14,toeT:2.4,plinth:0},
-  ledger:  {w:1.44,h:.45,T:.12,tilt:-.66,top:'soft',segX:8,segY:4,toeW:.92,toeH:.10,toeT:2.2,plinth:0},
-  pedestal:{w:1.02,h:.58,T:.15,tilt:-.12,top:'flat',segX:6,segY:6,toeW:.94,toeH:.12,toeT:2.6,plinth:.14},
-  /* fix-16/A9 · a plate tall enough to carry a passport-sized portrait ABOVE
-     the name without the name shrinking to carry it. `recess` is the
-     portrait window in slab units (w, h, centre y, depth); the other shapes
-     have none and are byte-identical to before. */
-  portrait:{w:1.06,h:.92,T:.11,tilt:-.24,top:'soft',segX:7,segY:8,toeW:.70,toeH:.14,toeT:2.4,plinth:0,
-    recess:{w:.46,h:.42,cy:.24,depth:.012}},
-};
-function buildNameplateEM(def,groundH){
-  // A set stone carrying a depth-tested engraved face INSIDE the scene — it
-  // lives under the same sun, shadow map and fog as the tree.
-  const S=NAMEPLATE_SHAPES[def.shape]||NAMEPLATE_SHAPES.tablet;
-  const grp=new THREE.Group();
-  const W=def.w??S.w,H=def.h??S.h,T=S.T,tilt=S.tilt;
-  const sM=makeStoneMat(.075,.14,.50,.1);
-  const slab=new THREE.BoxGeometry(W,H,T,S.segX,S.segY,1);
-  // soften: a WHISPER of corner wear + hand-cut edge noise (deterministic).
-  // 'arch' pulls the top corners in for a rounded headstone crown; 'flat'
-  // keeps a squared top; 'soft' is the original tablet crown.
-  {
-    const pa=slab.attributes.position;
-    for(let i=0;i<pa.count;i++){
-      let x=pa.getX(i),y=pa.getY(i),z=pa.getZ(i);
-      const ex=Math.abs(x)/(W/2),ey=Math.abs(y)/(H/2);
-      if(S.top==='arch'&&y>0){const t=y/(H/2);x*=1-t*t*.34;}
-      const round=1-Math.pow(Math.max(0,ex*ey-.86)/.14,2)*.045;
-      const crumb=(hashN(Math.round(x*731),Math.round(y*731),Math.round(z*731))-.5)*.007*(ex>.92||ey>.92?1:.15);
-      pa.setXYZ(i,x*round+crumb,y*round+crumb,z);
-    }
-    slab.computeVertexNormals();
-  }
-  const slabM=new THREE.Mesh(slab,sM);
-  slabM.castShadow=true;slabM.receiveShadow=true;
-  grp.add(slabM);
-  // engraved face: a hair proud of the slab, alpha-tested canvas text
-  const face=new THREE.Mesh(new THREE.PlaneGeometry(W*.92,H*.82),
-    new THREE.MeshStandardMaterial({map:def.tex,transparent:true,roughness:.88,metalness:0,
-      polygonOffset:true,polygonOffsetFactor:-1.5,polygonOffsetUnits:-2,
-      ...(def.tex.userData.bump?{bumpMap:def.tex.userData.bump,bumpScale:-0.006}:{})}));   // fix-40 · still tier relief
-  face.position.z=T/2+.0035;
-  face.receiveShadow=true;
-  grp.add(face);
-  /* fix-16/A9 · THE PORTRAIT RECESS — a real one, not a painted rectangle.
-     The photo plane sits BEHIND the slab face by `depth` and is ringed by four
-     thin lips standing proud of it, so the window is lit, self-shadowed and
-     occluded by the same sun and shadow map as everything else. With no photo
-     the recess is still cut, and it reads as the empty setting it is. */
-  if(S.recess&&def.photoTex){
-    const RC=S.recess,rw=W*RC.w,rh=H*RC.h,cy=H*RC.cy,dz=RC.depth;
-    const photo=new THREE.Mesh(new THREE.PlaneGeometry(rw,rh),
-      new THREE.MeshStandardMaterial({map:def.photoTex,roughness:.52,metalness:0}));
-    // The slab is a solid box, so the recess cannot be cut out of it. The
-    // photo therefore sits a hair PROUD of the face and the four lips stand
-    // proud of the photo, forming a real well: the lips cast into it, the
-    // sun rakes across it, and it is depth-tested and shadowed like the rest.
-    photo.position.set(0,cy,T/2+.0015);
-    photo.receiveShadow=true;
-    grp.add(photo);
-    const lipT=.013,lipD=dz+.006;
-    const lipM=sM;
-    for(const[lw,lh,lx,ly]of[[rw+lipT*2,lipT,0,cy+rh/2+lipT/2],[rw+lipT*2,lipT,0,cy-rh/2-lipT/2],
-                              [lipT,rh+lipT*2,-rw/2-lipT/2,cy],[lipT,rh+lipT*2,rw/2+lipT/2,cy]]){
-      const lip=new THREE.Mesh(new THREE.BoxGeometry(lw,lh,lipD),lipM);
-      lip.position.set(lx,ly,T/2+lipD/2);
-      lip.castShadow=true;lip.receiveShadow=true;
-      grp.add(lip);
-    }
-  }
-  emPlateFace=face;emPlateFaceArgs={name:def.plateName,dates:def.plateDates};   // re-engrave when Marcellus arrives
-  // plinth toe: a buried footing so the slab meets soil like set stone
-  const toe=new THREE.Mesh(new THREE.BoxGeometry(W*S.toeW,S.toeH,T*S.toeT),sM);
-  toe.position.set(0,-H/2+.015,-T*.3);
-  toe.castShadow=true;toe.receiveShadow=true;
-  grp.add(toe);
-  // pedestal: a low stepped base the upright stone is set upon (still embedded)
-  let lift=0;
-  if(S.plinth>0){
-    const base=new THREE.Mesh(new THREE.BoxGeometry(W*1.04,S.plinth,T*3.0),sM);
-    base.position.set(0,-H/2-S.plinth*.5+.02,-T*.2);
-    base.castShadow=true;base.receiveShadow=true;
-    grp.add(base);
-    lift=S.plinth*.9;
-  }
-  const y0=groundH(def.x,def.z);
-  grp.position.set(def.x,y0+H/2*Math.cos(tilt)-(def.embed??.05)+lift,def.z);
-  grp.rotation.order='YXZ';
-  grp.rotation.y=def.faceAz;
-  grp.rotation.x=tilt;
-  grp.userData.label='engraved nameplate';
-  grp.userData.em={kind:'nameplate',x:def.x,z:def.z,r:W*.42,embed:def.embed??.05};
-  return grp;
-}
-
-/* ================= fix-16/A8 · THE PET OBJECTS =================
-
-   Four objects, in the research's own payoff-per-difficulty order
-   (review/research/2026-07-27/pet-memorial-objects.md §4). They occupy the
-   PRIMARY object slot — one object, one socket — rather than adding four
-   independent slots, because §2.3's restraint rule is explicit: sourced advice
-   warns against "filling every inch" or building "a museum", and a catalogue
-   that lets four keepsakes accumulate at the roots is exactly that museum.
-   The companion lantern keeps its own independent slot; nothing else gains one.
-
-   REFUSED, PERMANENTLY, and recorded here so the refusal is attributable:
-   · angel and cherub statuary. It sells in real commercial volume and appears
-     on ZERO first-person "this is what helped me" account in the research —
-     the clearest sells-but-does-not-comfort signal found.
-   · any literal rainbow-bridge structure. Even people who use and value the
-     poem call the object corny in the same breath.
-   Neither is built, and neither is reachable through any public id. */
-
-/** A paw print, drawn as a canvas texture — same technique as the nameplate. */
-function emMakePawTexture(nose){
-  const cv=document.createElement('canvas');cv.width=cv.height=512;
-  const c=cv.getContext('2d');
-  c.clearRect(0,0,512,512);
-  c.fillStyle='rgba(26,20,14,0.90)';
-  const el=(x,y,rx,ry,rot)=>{c.save();c.translate(x,y);c.rotate(rot);
-    c.beginPath();c.ellipse(0,0,rx,ry,0,0,Math.PI*2);c.fill();c.restore()};
-  if(nose){
-    // a nose print: two nostril slits over a broad textured pad
-    el(256,300,120,96,0);
-    c.globalCompositeOperation='destination-out';
-    el(214,268,20,44,-0.32);el(298,268,20,44,0.32);
-    c.globalCompositeOperation='source-over';
-    c.fillStyle='rgba(255,247,232,0.30)';
-    for(let i=0;i<90;i++){
-      const a=Math.random()*0;   // no rng: a fixed lattice of pad grain
-      const gx=150+(i%10)*23,gy=250+Math.floor(i/10)*12;
-      c.fillRect(gx,gy,7,4);
-    }
-  }else{
-    // four toes over a heel pad — the universal graphic, per the research
-    el(256,352,104,86,0);
-    el(150,238,40,52,-0.36);el(216,190,40,54,-0.13);
-    el(296,190,40,54,0.13);el(362,238,40,52,0.36);
-  }
-  const t=new THREE.CanvasTexture(cv);
-  t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=4;
-  return t;
-}
-
-/** 1 · paw / nose print disc — the best-evidenced object in the research. */
-function buildPawDiscEM(def,groundH,seedG){
-  const R=EM_SPREAD(seedG,0x9A0DE);
-  const r=def.r??.17,h=.045;
-  const grp=new THREE.Group();
-  const body=new THREE.Mesh(new THREE.CylinderGeometry(r,r*1.04,h,26),makeStoneMat(.09,.07,.56,.14));
-  body.castShadow=true;body.receiveShadow=true;
-  grp.add(body);
-  const face=new THREE.Mesh(new THREE.CircleGeometry(r*.86,26),
-    new THREE.MeshStandardMaterial({map:emMakePawTexture(!!def.nose),transparent:true,
-      roughness:.92,metalness:0,polygonOffset:true,polygonOffsetFactor:-1.5,polygonOffsetUnits:-2}));
-  face.rotation.x=-Math.PI/2;face.position.y=h/2+.0025;
-  face.receiveShadow=true;
-  grp.add(face);
-  const y0=groundH(def.x,def.z);
-  grp.position.set(def.x,y0+h*.5-.012,def.z);
-  grp.rotation.y=def.rot??(R()*Math.PI*2);
-  grp.userData.label='paw print disc';
-  grp.userData.em={kind:'paw',x:def.x,z:def.z,r:r*1.1,embed:.012};
-  return grp;
-}
-
-/** 2 · the favourite toy — ball, bone, or the CAT-NATIVE yarn ball. */
-function buildToyEM(def,groundH,seedG){
-  const R=EM_SPREAD(seedG,0x707A1);
-  const kind=def.kind==='bone'?'bone':def.kind==='yarn'?'yarn':'ball';
-  const grp=new THREE.Group();
-  const y0=groundH(def.x,def.z);
-  if(kind==='ball'){
-    const r=.062;
-    const m=new THREE.MeshStandardMaterial({color:new THREE.Color().setHSL(.03,.55,.42),roughness:.55});
-    m.onBeforeCompile=sh=>{
-      sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vTP;')
-        .replace('#include <begin_vertex>','#include <begin_vertex>\nvTP=position;');
-      sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nvarying vec3 vTP;')
-        .replace('#include <map_fragment>',`#include <map_fragment>
-// a worn rubber ball: one moulded seam band and scuffed high spots
-float band=smoothstep(0.05,0.02,abs(vTP.y));
-diffuseColor.rgb=mix(diffuseColor.rgb,vec3(0.92,0.90,0.86),band*0.55);
-diffuseColor.rgb*=0.88+0.24*smoothstep(-0.02,0.05,vTP.y+vTP.x*0.4);`);
-    };
-    const b=new THREE.Mesh(new THREE.SphereGeometry(r,20,14),m);
-    b.position.y=r*.92;grp.add(b);
-    grp.userData.em={kind:'toy',x:def.x,z:def.z,r:r*1.5,embed:.008};
-  }else if(kind==='bone'){
-    const L=.20,r=.021;
-    const m=new THREE.MeshStandardMaterial({color:new THREE.Color().setHSL(.10,.22,.62),roughness:.72});
-    const shaft=new THREE.Mesh(new THREE.CylinderGeometry(r,r,L,12),m);
-    shaft.rotation.z=Math.PI/2;shaft.position.y=r*1.5;grp.add(shaft);
-    for(const sx of[-1,1])for(const sz of[-1,1]){
-      const k=new THREE.Mesh(new THREE.SphereGeometry(r*1.5,12,9),m);
-      k.position.set(sx*L*.5,r*1.5,sz*r*1.25);grp.add(k);
-    }
-    grp.userData.em={kind:'toy',x:def.x,z:def.z,r:L*.62,embed:.006};
-  }else{
-    /* the yarn ball. Not optional: it is the one cat-native object in the
-       catalogue, and cats are about half the market while the whole scene —
-       ground, approach path, a tree you orbit — is dog-shaped. */
-    const r=.058;
-    const m=new THREE.MeshStandardMaterial({color:new THREE.Color().setHSL(.55,.30,.52),roughness:.95});
-    m.onBeforeCompile=sh=>{
-      sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vTP;')
-        .replace('#include <begin_vertex>','#include <begin_vertex>\nvTP=position;');
-      sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nvarying vec3 vTP;'+NOISE_GLSL)
-        .replace('#include <map_fragment>',`#include <map_fragment>
-// wound thread: two crossing helical bands plus fibre fuzz
-float w1=sin(atan(vTP.z,vTP.x)*3.0+vTP.y*95.0);
-float w2=sin(atan(vTP.y,vTP.x)*3.0+vTP.z*95.0);
-float th=max(abs(w1),abs(w2));
-diffuseColor.rgb*=0.78+0.34*th;
-diffuseColor.rgb*=0.92+0.16*bnoise(vTP*180.0);`)
-        .replace('#include <roughnessmap_fragment>','#include <roughnessmap_fragment>\nroughnessFactor=1.0;');
-    };
-    const b=new THREE.Mesh(new THREE.SphereGeometry(r,22,16),m);
-    b.position.y=r*.94;grp.add(b);
-    // one loose strand trailing onto the soil
-    const pts=[],rad=[];
-    for(let i=0;i<=7;i++){const t=i/7;
-      pts.push(new THREE.Vector3(def.x+r*(.7+t*1.9),0,def.z+Math.sin(t*4.1)*r*.9));rad.push(.0035*(1-t*.35))}
-    for(const p of pts)p.y=groundH(p.x,p.z)+.006;
-    const strand=new THREE.Mesh(chunkGeo(tubeGeometry({id:9700,parent:-1,depth:0,kind:'root',pts,radii:rad,gnarl:0,lobes:null},6,groundH)),
-      new THREE.MeshStandardMaterial({color:new THREE.Color().setHSL(.55,.28,.5),roughness:1,vertexColors:true}));
-    strand.castShadow=true;strand.receiveShadow=true;
-    strand.position.set(-def.x,-y0,-def.z);   // the tube is built in world space
-    grp.add(strand);
-    grp.userData.em={kind:'toy',x:def.x,z:def.z,r:r*1.6,embed:.008};
-  }
-  grp.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true}});
-  grp.position.set(def.x,y0,def.z);
-  grp.rotation.y=def.rot??(R()*Math.PI*2);
-  grp.userData.label='favourite toy · '+kind;
-  return grp;
-}
-
-/** 3 · the collar and its tag — the object owners actually keep. */
-function buildCollarEM(def,groundH,seedG){
-  const R=EM_SPREAD(seedG,0xC0113);
-  const r=.085,tube=.011;
-  const grp=new THREE.Group();
-  const leather=new THREE.MeshStandardMaterial({color:new THREE.Color().setHSL(.03,.42,.22),roughness:.78});
-  const strap=new THREE.Mesh(new THREE.TorusGeometry(r,tube,10,40),leather);
-  strap.rotation.x=Math.PI/2;
-  strap.scale.set(1,.88,1);           // a laid-down collar settles into an oval
-  strap.position.y=tube*.85;
-  grp.add(strap);
-  // buckle
-  const buckle=new THREE.Mesh(new THREE.TorusGeometry(tube*1.9,tube*.42,8,16),
-    new THREE.MeshStandardMaterial({color:0x8a8378,roughness:.35,metalness:.7}));
-  buckle.rotation.x=Math.PI/2;buckle.position.set(r*.98,tube*.9,0);
-  grp.add(buckle);
-  // the tag: a small engraved disc lying just inside the strap
-  const tagTex=(()=>{
-    const cv=document.createElement('canvas');cv.width=cv.height=256;
-    const c=cv.getContext('2d');
-    c.clearRect(0,0,256,256);
-    c.fillStyle='rgba(120,112,98,1)';c.beginPath();c.arc(128,128,120,0,Math.PI*2);c.fill();
-    const nm=plateClip(def.name,12)||'';
-    if(nm){
-      c.textAlign='center';c.textBaseline='middle';
-      let s=64;c.font=`600 ${s}px Georgia, serif`;
-      while(s>18&&c.measureText(nm.toUpperCase()).width>190){s-=4;c.font=`600 ${s}px Georgia, serif`}
-      c.fillStyle='rgba(255,250,238,0.5)';c.fillText(nm.toUpperCase(),128,132+s*.05);
-      c.fillStyle='rgba(30,26,20,0.95)';c.fillText(nm.toUpperCase(),128,130);
-    }
-    const t=new THREE.CanvasTexture(cv);t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=4;return t;
-  })();
-  const tag=new THREE.Mesh(new THREE.CircleGeometry(.026,20),
-    new THREE.MeshStandardMaterial({map:tagTex,transparent:true,roughness:.42,metalness:.55}));
-  tag.rotation.x=-Math.PI/2;tag.position.set(r*.28,tube*.55,r*.42);
-  grp.add(tag);
-  grp.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true}});
-  const y0=groundH(def.x,def.z);
-  grp.position.set(def.x,y0-.004,def.z);
-  grp.rotation.y=def.rot??(R()*Math.PI*2);
-  grp.userData.label='collar and tag';
-  grp.userData.em={kind:'collar',x:def.x,z:def.z,r:r*1.25,embed:.006};
-  return grp;
-}
-
-/** 4 · the empty bowl — "the routine of care that stopped".
-    The one INFERRED entry in the research's table rather than an observed
-    object, built last and flagged as such. */
-function buildBowlEM(def,groundH,seedG){
-  const R=EM_SPREAD(seedG,0xB0DE1);
-  const pts=[];
-  for(let i=0;i<=9;i++){const t=i/9;
-    pts.push(new THREE.Vector2(.028+.082*Math.pow(t,.62),.004+.062*t));}
-  pts.push(new THREE.Vector2(.104,.070));pts.push(new THREE.Vector2(.094,.066));
-  for(let i=9;i>=0;i--){const t=i/9;
-    pts.push(new THREE.Vector2(Math.max(.006,.022+.078*Math.pow(t,.62)),.012+.058*t));}
-  const g=new THREE.LatheGeometry(pts,28);
-  g.computeVertexNormals();
-  const mesh=new THREE.Mesh(g,new THREE.MeshStandardMaterial({
-    color:new THREE.Color().setHSL(.58,.10,.60),roughness:.34,metalness:.05,side:THREE.DoubleSide}));
-  mesh.castShadow=true;mesh.receiveShadow=true;
-  const y0=groundH(def.x,def.z);
-  mesh.position.set(def.x,y0-.008,def.z);
-  mesh.rotation.y=def.rot??(R()*Math.PI*2);
-  mesh.userData.label='empty bowl';
-  mesh.userData.em={kind:'bowl',x:def.x,z:def.z,r:.13,embed:.008};
-  return mesh;
-}
-
-/* ---------- the low memorial stone (real scene geometry) ---------- */
-
-function buildMemorialStoneEM(def,groundH,seedG){
-  const R=EM_SPREAD(seedG,0x5700E);
-  const size=def.size??.30;
-  /* fix-16/A7 · the memorial stone is the object the product is BUILT on, and
-     it was the same geodesic sphere as the scenery pebbles. Cut faces, a flat
-     bedding plane it sits on, sharp arrises. flatten 0.52 keeps the low,
-     settled form the placement geometry assumes. */
-  const g=cutStoneGeometry(size,R,{planes:16,flatten:.52,bed:.62,rough:.16});
-  // weathered, half-mossed, warm-grey — saturation keeps the hemisphere
-  // light from turning it blue against the soil
-  const mesh=new THREE.Mesh(g,makeStoneMat(.075,.13,.27,.45));
-  const y0=groundH(def.x,def.z);
-  mesh.position.set(def.x,y0+size*.42-(def.embed??.07),def.z);
-  mesh.rotation.y=def.rot??(R()*Math.PI*2);
-  mesh.castShadow=true;mesh.receiveShadow=true;
-  mesh.userData.label='low memorial stone';
-  mesh.userData.em={kind:'stone',x:def.x,z:def.z,r:size*1.05,embed:def.embed??.07};
-  return mesh;
-}
 
 /* ================= L6 · scenes (data) ================= */
 const STD_PROPS=[{type:'stone',x:4.2,z:-2.9,size:.19,rot:1.2},{type:'stone',x:-5.1,z:3.7,size:.13,rot:2.8},
@@ -6364,29 +5730,6 @@ const SCENES={
    {type:'stone',x:-10.5,z:6.2,size:.55,rot:1.7},{type:'stone',x:9.8,z:2.2,size:.4,rot:.4}]}
 };
 
-/* §7E.2 · premium SKINS — a restrained colour GRADE laid over whatever light the
-   owner chose. Each field lerps a live uniform toward a tint by a SMALL amount
-   (exposure multiplies); naturalistic hues only, so the memory leaves are never
-   unbalanced and the composition/camera are untouched. Colour only → no geometry,
-   checksum() unchanged. 'none' is the base and applies nothing. */
-const SKINS={
- 'warm-amber':{exposure:1,
-   sun:[0xffc879,.09],hemiS:[0xf0d3a0,.07],hemiG:[0x7a5630,.08],fill:[0xffddab,.09],
-   canopy:[0xffbf67,.32],envI:1.01,
-   soilA:[0xc08a48,.28],soilB:[0xd19b58,.28],moist:[0x74401f,.22],
-   subject:[1.12,1.03,.78,.72],skyMul:[1.035,1.015,.965]},
- 'cool-slate':{exposure:1,
-   sun:[0xb6cce5,.10],hemiS:[0x91abc7,.09],hemiG:[0x43515f,.10],fill:[0xb7ccdf,.10],
-   canopy:[0x92b8d2,.36],envI:.99,
-   soilA:[0x758da1,.30],soilB:[0x889dad,.30],moist:[0x415666,.24],
-   subject:[.78,.98,1.18,.72],skyMul:[.92,.99,1.10]},
- 'soft-dawn':{exposure:1,
-   sun:[0xffd9d1,.09],hemiS:[0xd8c7d7,.08],hemiG:[0x9e7f7d,.09],fill:[0xf5d9d6,.09],
-   canopy:[0xefb7bd,.36],envI:1.01,
-   soilA:[0xbd8f89,.30],soilB:[0xcba29a,.30],moist:[0x72504f,.24],
-   subject:[1.14,.78,1.04,.78],skyMul:[1.10,.84,1.07]},
-};
-
 /* ================= L7 · app ================= */
 const BOOT=window.__v3boot=[];const mark=s=>BOOT.push(s+'@'+(performance.now()|0));
 mark('module');
@@ -6430,53 +5773,14 @@ let folMul=1;
 // certified three; Earth & Moss stays byte-identical to its Phase-3 freeze.
 const PUBLIC_GROUND_IDS=new Set(['earth-moss','quiet-garden','wild-meadow','stone-grove']);
 const APPROACH_IDS=new Set(['none','left','right']);
-/* fix-16/A8 · the four pet objects join the PRIMARY slot. One object, one
-   socket — see the restraint rule at buildPawDiscEM. */
-const PUBLIC_OBJECT_TYPES=new Set(['none','stone','lantern','paw','toy','collar','bowl']);
-const TOY_KINDS=new Set(['ball','bone','yarn']);
-const EMBLEM_IDS=new Set([]);   // public build: the faith-emblem slot is not offered
-// §7C.3 · front-centre is the new visitor-facing preset; the roots-* sockets
-// remain accepted so already-published memorials keep their exact placement.
-const OBJECT_SOCKETS=new Set(['front-centre','front-left','front-right','roots-left','roots-right']);
-// §7E · premium SKIN (a gentle colour-grade over the chosen light) + WEATHER
-// ambiance (rain/mist). Colour + a seeded particle overlay ONLY — never
-// geometry, so checksum()/geometry.report() are byte-identical to the base and
-// the Gold manifest stays valid. 'none' is the base look, always available;
-// snow was cut (founder) — rain + mist ship.
-const PUBLIC_SKIN_IDS=new Set([]);      // the light grades are the product's paid enhancements, not part of the study (2026-09-08)
-const PUBLIC_WEATHER_IDS=new Set([]);   // likewise the weathers; ?skin= and ?weather= fall back to the base look
 let groundId=PUBLIC_GROUND_IDS.has(Q.get('ground'))?Q.get('ground'):'earth-moss';
 let approachId=APPROACH_IDS.has(Q.get('approach'))?Q.get('approach'):'none';
 /* the visitor-arrival azimuth the approach anchors to (the Studio passes
    the saved visitor view's azimuth; quantized for determinism) */
 const quantAz=a=>Math.round((Number.isFinite(a)?a:.62)*50)/50;
 let approachAz=Q.has('viewAz')?quantAz(Number(Q.get('viewAz'))):.62;
-/* 7C F1 · `lantern` is an INDEPENDENT slot, not another value of `type`: a
-   crescent (or any emblem, or a stone, or nothing) may stand with a lit
-   grave-lamp. `lanternSocket` defaults to the primary socket. */
-let objectState={type:PUBLIC_OBJECT_TYPES.has(Q.get('object'))?Q.get('object'):'none',
-  emblem:EMBLEM_IDS.has(Q.get('emblem'))?Q.get('emblem'):'none',
-  socket:OBJECT_SOCKETS.has(Q.get('socket'))?Q.get('socket'):'roots-left',
-  lantern:Q.get('lantern')==='1',
-  lanternSocket:OBJECT_SOCKETS.has(Q.get('lanternSocket'))?Q.get('lanternSocket'):null,
-  // fix-16/A8 · VARIANTS of the pet objects, not slots of their own
-  toyKind:TOY_KINDS.has(Q.get('toy'))?Q.get('toy'):'ball',
-  print:Q.get('print')==='nose'?'nose':'paw'};
-// §7E · the pinned enhancement look. Refused input silently falls back to the
-// base, so a host can never drive a look this build will not honour.
-let skinId=PUBLIC_SKIN_IDS.has(Q.get('skin'))?Q.get('skin'):'none';
-let weatherId=PUBLIC_WEATHER_IDS.has(Q.get('weather'))?Q.get('weather'):'none';
-// A fulfilment STILL (and reduced-motion) freeze ambient weather motion to a
-// pinned, reproducible frame — so the 4K portrait and a paused view match.
-const captureStill=Q.get('stills')==='1';
-const plateClip=(s,n)=>(s==null?'':String(s)).replace(/\s+/g,' ').trim().slice(0,n);
-let plateState={photo:null,name:plateClip(Q.get('plateName'),60),
-  from:plateClip(Q.get('plateFrom'),12),to:plateClip(Q.get('plateTo'),12),
-  shape:NAMEPLATE_SHAPES[Q.get('plateShape')]?Q.get('plateShape'):'tablet'};   // §7C.4
-let emPlacements=null;   // {plate:{…}, stone:{…}} for the active build — QA probe
 let emPathInfo=null;     // Phase 5 · approach QA: corridor clearances, end apron
-let emEmblemEnv=null;    // §7C.5 · measured faith-emblem envelope for the equality gate
-const DEFAULT_VIEW_AZ=.62;   // the memorial portrait's arrival azimuth (Studio contract)
+const DEFAULT_VIEW_AZ=.62;   // the default view azimuth
 const canonicalSeed=(value,fallback=0)=>{const n=Number(value);return Number.isFinite(n)?(Math.trunc(n)>>>0):(fallback>>>0)};
 seed=canonicalSeed(seed,S.seed);
 const UNSAFE_MERGE_KEYS=new Set(['__proto__','prototype','constructor']);
@@ -6586,16 +5890,6 @@ const defaultWind=reducedMotion?0:.22;
 const requestedWind=Number(Q.get('wind'));
 const initialWind=reducedMotion?0:(Q.has('wind')&&Number.isFinite(requestedWind)?clamp(requestedWind,0,1):defaultWind);
 const windU={uT:{value:0},uWind:{value:initialWind},uWDir:{value:new THREE.Vector3(.82,0,.57)}};
-/* fix-20/A3 · subject-only palette grade. It multiplies material albedo before
-   lighting, so the chosen light still supplies every shadow, highlight and
-   dusk rim. The sky and portrait texture never pass through this uniform. */
-const premiumLookU={
-  uSkinMul:{value:new THREE.Vector3(1,1,1)},
-  uSkinAmount:{value:0},
-  uRain:{value:0},
-  uRainShelter:{value:new THREE.Vector3(0,0,1.6)},
-};
-const weatherU={uWT:{value:0}};   // §7E.3 · the weather clock; frozen (not advanced) for a reproducible still
 const canopyU={uCanC:{value:new THREE.Vector3(0,6,0)},uSunV:{value:new THREE.Vector3(0,-1,0)},uSunC:{value:new THREE.Color(0xffe0b0).multiplyScalar(.55)},uEnvI:{value:1}};
 const horU={value:new THREE.Color(0xe7b177)};
 const soilU={uSoilA:{value:new THREE.Color(0x6b5138)},uSoilB:{value:new THREE.Color(0x8a6c49)},uMoist:{value:new THREE.Color(0x453220)},uEco:{value:1},uMossA:{value:0},uGravelA:{value:0},uRelief:{value:1}};
@@ -6603,14 +5897,7 @@ const soilU={uSoilA:{value:new THREE.Color(0x6b5138)},uSoilB:{value:new THREE.Co
 /* lights (persistent; scene data drives values) */
 const sun=new THREE.DirectionalLight(0xffffff,3);
 sun.castShadow=true;
-/* fix-40 · THE STILL TIER (stills=1, the fulfilment portrait only). A 4K frame
-   has a 4 mm pixel; the live 1024 map has a 19 mm texel, which is why the root
-   contact was a ±5 cm smudge at 100 %. The still gets a 4096 map (4.8 mm per
-   texel), the hardware kernel widened to 8x8 taps at 2-texel steps so the
-   canopy penumbra stays in millimetres, and a blocker search (PCSS) so a
-   pebble's shadow is sharp where a canopy's is soft. Presentation only; the
-   digests do not see a shadow map. Bias scales with the texel as fix-16/A3 set. */
-const SHADOW_SIZE=captureStill?4096:Qx.shadow;
+const SHADOW_SIZE=Qx.shadow;
 sun.shadow.mapSize.set(SHADOW_SIZE,SHADOW_SIZE);
 /* fix-16/A3 · bias is a function of TEXEL SIZE, so it now scales with the
    preset's map instead of being pinned to the 1024 the balanced preset happens
@@ -6633,7 +5920,6 @@ let leafMat=null,blossomMat=null;
 let wood=null,foliage=null,blossoms=null,fruit=null,barkMat=null,ground=null,eco=[],props=[];
 let woodDepthMat=null,leafDepthMat=null,blossomDepthMat=null;   // v4.1/S-01: wind-unified shadow materials
 let groundH=null,leafBranch=null,branchMeta=[],canopyR=1.6,buildInfo={ms:0,tris:0},rootLines=null,lastSk=null;
-let rainMesh=null;   // §7E.3 · persistent rain overlay (built once, toggled by weatherId)
 const GROUND_R=45;   // stature: disc edge stays past the rescaled fog — no horizon arc
 
 function disposeTree(){
@@ -6647,7 +5933,6 @@ function disposeEco(){
   for(const o of props)kill(o);
   if(ground){kill(ground);ground=null}
   eco=[];props=[];
-  emPlateFace=null;emPlateFaceArgs=null;   // Phase 3: never re-engrave a disposed face
 }
 function build(){
   const t0=performance.now();
@@ -6674,18 +5959,13 @@ function build(){
   wood.updateMatrixWorld(true);
   ebBakeBarkFields(woodGeo,wood.matrixWorld,barkMat);   // fix-40 phone round · the five bark fields, once, on the GPU (WebGL2)
   scene.add(wood);
-  /* fix-40 · still tier: the finer lamina grid (leafDetail 1). The sprig
-     template is stream-free and unhashed — checksum(), geometry.report() and
-     the anchors are byte-identical either way; only the blade's tessellation
-     changes, which is what the 100 % crop of a kite-shaped leaf was showing. */
-  foliage=buildFoliage(S,sk.anchors,leafMat,folMul*Qx.sprigMul,captureStill?1:(Qx.leafDetail??1),seasonNow().tipCover??1);
+  foliage=buildFoliage(S,sk.anchors,leafMat,folMul*Qx.sprigMul,(Qx.leafDetail??1),seasonNow().tipCover??1);
   const tFol=performance.now();
   foliage.mesh.customDepthMaterial=leafDepthMat=makeLeafDepthMaterial(S,windU);   // v4.1/S-01
   scene.add(foliage.mesh);
   leafBranch=foliage.leafBranch;
   if(foliage.centroid)canopyU.uCanC.value.copy(foliage.centroid);
   canopyR=foliage.canopyR||1.6;
-  premiumLookU.uRainShelter.value.set(canopyU.uCanC.value.x,canopyU.uCanC.value.z,canopyR);
   blossoms=buildBlossoms(S,sk.anchors,blossomMat,folMul*Qx.sprigMul);
   if(blossoms){blossoms.customDepthMaterial=blossomDepthMat=makeBlossomDepthMaterial(windU);scene.add(blossoms)}
   fruit=buildFruit(S,sk.anchors,folMul*Qx.sprigMul);   // was built but never wired in — banyan figs live again
@@ -6698,8 +5978,6 @@ function build(){
     +(blossoms?(blossoms.count*blossoms.geometry.index.count/3)|0:0)
     +(fruit?(fruit.count*(fruit.geometry.index?fruit.geometry.index.count:fruit.geometry.attributes.position.count)/3)|0:0);
   lastSk=sk;   // Phase 0 harness: retain the grown graph for stature probing (no rng effect)
-  memBuildCounter++;memArcCache.clear();   // Phase 2: branch tables changed
-  if(memState.records.length)memRefresh(); // re-seat memory leaves on the new build
   fitShadows();
   fitCamera(false);
   updateTitle();
@@ -6744,123 +6022,8 @@ function buildEnvironment(){
     }else emPathInfo=null;
     const taken=[];
     if(pathF)for(const c of pathF.corridor)taken.push(c);
-    emPlacements={};
-    emEmblemEnv=null;   // §7C.5 · recomputed only when a faith emblem is built
-    // §7C.3 · the arriving visitor's azimuth. The nameplate, the primary
-    // emblem/object and their facings anchor to the SAVED VISITOR VIEW
-    // (approachAz) so they greet the viewer front-and-centre, recomputed
-    // whenever that view is saved. With no saved view approachAz defaults to
-    // DEFAULT_VIEW_AZ, so the arrival frame is unchanged. This is a per-memorial
-    // TRANSFORM: geometry.report() below still solves at the canonical
-    // DEFAULT_VIEW_AZ, so the certified Gold checksums never move.
-    const arriveAz=approachAz;
-    const wantPlate=!!plateState.name;
-    const plateHard=emPlateFootprint(plateState.shape);
-    if(wantPlate){
-      // Front-and-centre to the arriving visitor — never welded to a fixed
-      // sun-relative side where it could land behind the tree. Far enough out
-      // to clear the prop-root curtain; engraved face turned to the camera.
-      /* Phase 7 F8 · on a DENSE-ROOT banyan the old fixed stand-off
-         (rootR*1.30 + 0.7, where rootR is the 90th-percentile contact radius)
-         still left the stone inside the outer tenth of the prop-root curtain,
-         and at `front-centre` the visitor looks straight down that colonnade:
-         the engraved face disappeared behind root pillars while `front-left`
-         and `front-right` read fine. The stand-off is now a function of how
-         crowded the arrival wedge actually is — count the woody contact lines
-         inside a ±0.5 rad wedge about the arrival azimuth beyond 60 % of
-         rootR, and step the plate OUT toward the viewer until it stands in
-         front of that curtain instead of inside it. An open-rooted tree
-         measures density ≈ 0 and keeps the certified placement exactly. */
-      let dense=0,wedgeN=0;
-      if(rootLines)for(let q=0;q<rootLines.length;q+=3){
-        const rr=Math.hypot(rootLines[q],rootLines[q+1]);
-        if(rr<rootR*.6)continue;
-        let da=Math.atan2(rootLines[q+1],rootLines[q])-arriveAz;
-        da=Math.atan2(Math.sin(da),Math.cos(da));
-        if(Math.abs(da)>.5)continue;
-        wedgeN++;dense+=Math.max(rootLines[q+2],.02);
-      }
-      const curtain=Math.min(1,dense/.85);        // 0 = open front, 1 = a wall of props
-      const standoff=rootR*(1.30+.16*curtain)+.7+.55*curtain;
-      const p=emPlace(gH,rootLines,
-        {az0:arriveAz,r0:standoff,rMax:standoff+2.1,clear:.40,sep:1.0,hard:plateHard},taken);
-      if(p){
-        p.curtain=+curtain.toFixed(3);p.wedgeRoots=wedgeN;p.standoff=+standoff.toFixed(3);
-        emPlacements.plate=p;
-        taken.push({id:'plate',x:p.x,z:p.z,r:.9,hard:plateHard});
-      }
-    }
-    /* §7C.3 sockets, and the primary object slot. §7C.6's companion lamp is no
-       longer the same slot as the primary object (see the lantern block
-       below), so `type` here is only ever none | stone | faith | lantern. */
-    const objHard=t=>t==='stone'?.34:t==='faith'?.27:t==='lantern'?.17
-      :t==='paw'?.20:t==='toy'?.13:t==='collar'?.12:t==='bowl'?.15:.3;
-    const sockAzOf=s=>({'front-centre':arriveAz,'front-left':arriveAz+.42,'front-right':arriveAz-.42,
-      'roots-left':arriveAz+.60,'roots-right':arriveAz-.85}[s]??arriveAz);
-    const wantObject=objectState.type!=='none';
-    if(wantObject){
-      let p;
-      if(objectState.type==='lantern'&&emPlacements.plate){
-        p=emPlaceCompanionLamp(gH,rootLines,emPlacements.plate,objectState.socket,taken);
-      }else{
-        // §7C.3 · three visitor-facing presets (front-centre/left/right) plus the
-        // legacy roots sockets, all relative to the arrival azimuth. front-centre
-        // shares the plate's azimuth; emPlace keeps them collision-free (the plate
-        // is already in `taken`) or honestly refuses.
-        const sockAz=sockAzOf(objectState.socket);
-        const near=objectState.socket.startsWith('roots');
-        p=emPlace(gH,rootLines,
-          {az0:sockAz,r0:near?rootR*.96+.3:rootR*1.24+.6,rMax:(near?rootR*.96:rootR*1.24)+2.2,clear:.36,sep:.95,
-            hard:objHard(objectState.type)},taken);
-      }
-      if(p){emPlacements[objectState.type]=p;
-        taken.push({id:objectState.type,x:p.x,z:p.z,r:objectState.type==='stone'?.5:.42,
-          hard:objHard(objectState.type)})}
-    }
-    /* 7C F1 · THE COMPANION LANTERN SLOT (renderer-extension pattern).
-       An emblem and a lamp are not alternatives — a crescent standing over an
-       unlit grave is not the memorial the family asked for. `objectState.type`
-       keeps its historical meaning (the ONE primary object on its socket) and
-       the lantern gains an INDEPENDENT slot with its own socket, advertised as
-       capabilities.props = 3 and driven from Studio state as
-       setMemorialObject({type:'faith', emblem:'crescent', lantern:true}).
-       Asking for the companion lamp while the primary object already IS the
-       lantern is not an error and does not produce two lamps — the primary
-       placement stands. */
-    if(objectState.lantern&&!emPlacements.lantern){
-      const sock=objectState.lanternSocket||objectState.socket;
-      let p=emPlacements.plate
-        ? emPlaceCompanionLamp(gH,rootLines,emPlacements.plate,sock,taken)
-        : emPlace(gH,rootLines,{az0:sockAzOf(sock),r0:rootR*1.24+.6,rMax:rootR*1.24+2.8,
-            clear:.30,sep:.8,hard:objHard('lantern')},taken);
-      if(p){emPlacements.lantern=p;
-        taken.push({id:'lantern',x:p.x,z:p.z,r:.42,hard:objHard('lantern')})}
-    }
     const discs=[];
-    if(emPlacements.plate)discs.push({x:emPlacements.plate.x,z:emPlacements.plate.z,r:.82,sink:.05});
-    if(emPlacements.stone)discs.push({x:emPlacements.stone.x,z:emPlacements.stone.z,r:.52,sink:.055});
-    if(emPlacements.faith)discs.push({x:emPlacements.faith.x,z:emPlacements.faith.z,r:.44,sink:.05});
-    if(emPlacements.lantern)discs.push({x:emPlacements.lantern.x,z:emPlacements.lantern.z,r:.34,sink:.045});
-    // fix-16/A8 · each new object presses its own soil the way the others do,
-    // so it is embedded and contact-shadowed instead of standing on the lawn
-    if(emPlacements.paw)discs.push({x:emPlacements.paw.x,z:emPlacements.paw.z,r:.30,sink:.030});
-    if(emPlacements.toy)discs.push({x:emPlacements.toy.x,z:emPlacements.toy.z,r:.20,sink:.018});
-    if(emPlacements.collar)discs.push({x:emPlacements.collar.x,z:emPlacements.collar.z,r:.20,sink:.016});
-    if(emPlacements.bowl)discs.push({x:emPlacements.bowl.x,z:emPlacements.bowl.z,r:.24,sink:.022});
-    /* Section B review 1 (2026-07-26) quality concern: the wedge-aware plate
-       stand-off (Phase 7 F8 fix) can step the stone out into the sward, and
-       tussocks planted at its base cross the engraved face in the arrival
-       portrait. Every remembrance placement now keeps a grass-free apron —
-       a tended circle, as a groundskeeper would sweep it. Planned plantings
-       only: the soil bake, litter and pebbles are untouched. The plate's
-       apron is wider than the others because its engraved face is the one
-       surface the product promises stays legible. */
-    const grassClear=discs.length?(pads=>(x,z)=>{
-      for(const p of pads){const dx=x-p.x,dz=z-p.z;if(dx*dx+dz*dz<p.r2)return true}
-      return false})(discs.map(d=>({x:d.x,z:d.z,r2:Math.pow(d.r+(d.r>.7?.45:.28),2)}))):null;
-    // Phase 5 · Quiet Garden planting beds are placed before the soil bake
-    // so their mounds sink into real contact shadows too — but AFTER the
-    // plate and the chosen object (planting defers to remembrance).
+    const grassClear=null;
     let shrubPlan=null;
     if(groundId==='quiet-garden'&&sc.eco){
       shrubPlan=buildShrubsQG(gH,rootLines,seed,taken,pathK);
@@ -6938,55 +6101,7 @@ function buildEnvironment(){
         if(fine)eco.push(fine);
       }
     }else if(shrubPlan){shrubPlan.traverse(o=>{if(o.geometry)o.geometry.dispose()});}
-    if(emPlacements.plate){
-      const dates=plateState.from||plateState.to
-        ?[plateState.from,plateState.to].filter(Boolean).join(' — '):'';
-      // Face the engraving toward the ARRIVING CAMERA (the saved visitor view,
-      // nominal portrait distance), not merely radially outward — a set stone
-      // greets you.
-      const camX=Math.cos(arriveAz)*20,camZ=Math.sin(arriveAz)*20;
-      const toCamAz=Math.atan2(camZ-emPlacements.plate.z,camX-emPlacements.plate.x);
-      props.push(buildNameplateEM({x:emPlacements.plate.x,z:emPlacements.plate.z,
-        faceAz:Math.PI/2-toCamAz,plateName:plateState.name,plateDates:dates,
-        shape:plateState.shape,
-        photoTex:emPlatePhotoTex,
-        tex:emMakePlateTexture(plateState.name,dates,plateState.shape)},gH));
-    }
-    if(emPlacements.stone){
-      props.push(buildMemorialStoneEM({x:emPlacements.stone.x,z:emPlacements.stone.z},gH,seed));
-    }
-    if(emPlacements.faith){
-      const p=emPlacements.faith;
-      // §7C.3 · the primary emblem faces the arriving visitor too.
-      const camX=Math.cos(arriveAz)*20,camZ=Math.sin(arriveAz)*20;
-      const toCamAz=Math.atan2(camZ-p.z,camX-p.x);
-      props.push(buildFaithEmblemEM({x:p.x,z:p.z,emblem:objectState.emblem,
-        faceAz:Math.PI/2-toCamAz},gH,seed));
-    }
-    if(emPlacements.lantern){
-      const p=emPlacements.lantern;
-      const camX=Math.cos(arriveAz)*20,camZ=Math.sin(arriveAz)*20;
-      const toCamAz=Math.atan2(camZ-p.z,camX-p.x);
-      props.push(buildLanternEM({x:p.x,z:p.z,faceAz:Math.PI/2-toCamAz},gH,
-        seed,sceneId==='golden-hour'||sceneId==='dusk'));   // §7C.6 · lit in the low-light hours
-    }
-    /* fix-16/A8 · the pet objects. Each faces the arriving visitor the way the
-       plate and the emblem do, so a print reads as a print and a tag reads as
-       a tag from the frame the memorial is bought on. */
-    {
-      const faceOf=p=>{const camX=Math.cos(arriveAz)*20,camZ=Math.sin(arriveAz)*20;
-        return Math.PI/2-Math.atan2(camZ-p.z,camX-p.x)};
-      if(emPlacements.paw)props.push(buildPawDiscEM(
-        {x:emPlacements.paw.x,z:emPlacements.paw.z,rot:faceOf(emPlacements.paw),nose:objectState.print==='nose'},gH,seed));
-      if(emPlacements.toy)props.push(buildToyEM(
-        {x:emPlacements.toy.x,z:emPlacements.toy.z,kind:objectState.toyKind},gH,seed));
-      if(emPlacements.collar)props.push(buildCollarEM(
-        {x:emPlacements.collar.x,z:emPlacements.collar.z,rot:faceOf(emPlacements.collar),name:plateState.name},gH,seed));
-      if(emPlacements.bowl)props.push(buildBowlEM(
-        {x:emPlacements.bowl.x,z:emPlacements.bowl.z},gH,seed));
-    }
   }else{
-    emPlacements=null;
     const eR=mulberry32((seed^0x9e3779b9)>>>0);
     ground=buildGround(groundH,GROUND_R,horU,soilU,rootLines);
     scene.add(ground);
@@ -7111,8 +6226,7 @@ function applyScene(){
   canopyU.uSunV.value.copy(sv);
   canopyU.uSunC.value.set(sc.sun.color).multiplyScalar(.7*sc.sun.intensity/3);
   canopyU.uEnvI.value=clamp(sc.hemi.intensity*sc.sun.intensity/1.85,.2,1.2);   // V3: foliage fill derived from hemi x sun
-  applySkin();      // §7E.2 · lay the premium colour grade over the chosen light
-  applyWeather();   // §7E.3 · mist haze + rain overlay
+  meetHorizon();
   fitShadows();
 }
 /* §7E.2 · lay the active skin's colour grade over the uniforms applyScene just
@@ -7121,111 +6235,9 @@ function applyScene(){
 /* fix-42 · a grade must leave the ground melt and fog meeting the graded sky.
    Keep none/none a strict no-op, including scenes with a flat background. */
 function meetHorizon(){
-  if(!skyDome.visible||(skinId==='none'&&weatherId==='none'))return;
+  if(!skyDome.visible)return;
   horU.value.copy(skyU.uHorS.value);
   if(scene.fog)scene.fog.color.copy(skyU.uHorS.value);
-}
-function applySkin(){
-  premiumLookU.uSkinMul.value.set(1,1,1);premiumLookU.uSkinAmount.value=0;
-  const sk=SKINS[skinId];if(!sk)return;
-  const C=h=>new THREE.Color(h);
-  const L=(u,d)=>{if(d)u.lerp(C(d[0]),d[1])};
-  if(sk.subject){
-    premiumLookU.uSkinMul.value.set(sk.subject[0],sk.subject[1],sk.subject[2]);
-    premiumLookU.uSkinAmount.value=sk.subject[3];
-  }
-  if(sk.skyMul&&skyDome.visible){
-    const m=new THREE.Color().setRGB(sk.skyMul[0],sk.skyMul[1],sk.skyMul[2]);
-    skyU.uTop.value.multiply(m);skyU.uHorS.value.multiply(m);skyU.uBloomC.value.multiply(m);
-  }
-  renderer.toneMappingExposure*=sk.exposure??1;
-  L(soilU.uSoilA.value,sk.soilA);L(soilU.uSoilB.value,sk.soilB);L(soilU.uMoist.value,sk.moist);
-  L(canopyU.uSunC.value,sk.canopy);
-  if(sk.envI!=null)canopyU.uEnvI.value=clamp(canopyU.uEnvI.value*sk.envI,.15,1.4);
-  L(sun.color,sk.sun);
-  if(sk.fill)L(fill.color,sk.fill);
-  if(sk.hemiS)L(hemi.color,sk.hemiS);
-  if(sk.hemiG)L(hemi.groundColor,sk.hemiG);
-  if(skyDome.visible){
-    L(skyU.uTop.value,sk.sky);L(skyU.uHorS.value,sk.sky);L(skyU.uBloomC.value,sk.bloom);
-    L(skyU.uHorS.value,sk.horizon);
-    // Linear-light headroom for the dome's additive bloom after the composed grade.
-    // The same ceiling covers Soft Dawn and Warm Amber; none never enters here.
-    for(const u of [skyU.uTop,skyU.uHorS]){
-      u.value.r=Math.min(u.value.r,.92);u.value.g=Math.min(u.value.g,.92);u.value.b=Math.min(u.value.b,.92);
-    }
-  }else L(horU.value,sk.horizon);
-  meetHorizon();
-}
-/* §7E.3 · weather ambiance. Mist softens the horizon into a low haze (uniform-
-   only → always a still). Rain is a seeded particle overlay toggled here and
-   advanced in the render loop; it FREEZES to a pinned frame under reduced-motion
-   or a fulfilment still, so the 4K portrait and a paused view reproduce exactly. */
-function applyWeather(){
-  premiumLookU.uRain.value=0;
-  if(weatherId==='mist'&&scene.fog){
-    const mistColor=new THREE.Color(0xc7d0d4);
-    scene.fog.color.lerp(mistColor,.38);
-    scene.fog.near*=.50;scene.fog.far*=.64;
-    horU.value.lerp(mistColor,.18);
-    renderer.toneMappingExposure*=.995;
-    sun.intensity*=.90;fill.intensity*=1.04;
-    if(skyDome.visible){
-      skyU.uTop.value.lerp(mistColor,.07);
-      skyU.uHorS.value.lerp(mistColor,.26);
-      skyU.uBloomC.value.lerp(mistColor,.14);
-    }
-  }
-  if(weatherId==='rain'){
-    premiumLookU.uRain.value=1;
-    renderer.toneMappingExposure*=.91;
-    sun.intensity*=.72;fill.intensity*=.86;hemi.intensity*=1.04;
-    if(scene.fog){
-      scene.fog.color.lerp(new THREE.Color(0xaab7bf),.20);
-      scene.fog.far*=.94;
-    }
-    if(skyDome.visible){
-      skyU.uTop.value.multiply(new THREE.Color().setRGB(.72,.81,.90));
-      skyU.uHorS.value.multiply(new THREE.Color().setRGB(.78,.84,.90));
-      skyU.uBloomC.value.multiply(new THREE.Color().setRGB(.72,.81,.90));
-    }
-  }
-  ensureRain();
-  if(rainMesh)rainMesh.visible=(weatherId==='rain');
-  meetHorizon();
-}
-/* Build the rain overlay ONCE (persistent, like the sky dome): a set of thin
-   falling streaks in a column around the tree, seeded from an INDEPENDENT salted
-   stream (never the tree's rng), moved GPU-side by uWT so per-frame JS cost is
-   nil. Restrained — sparse, faint, cool-grey; never a downpour. */
-function ensureRain(){
-  if(rainMesh)return;
-  const N=Qx.id==='mobile'?360:560;               // within the mobile perf budget
-  const R=9.2,TOP=12.5,H=15.5,STREAK=.42;
-  const rr=mulberry32((canonicalSeed(seed,seed)^0x9e37a1b3)>>>0);   // §10: salted, tree rng untouched
-  const pos=new Float32Array(N*2*3),ph=new Float32Array(N*2),sp=new Float32Array(N*2),en=new Float32Array(N*2);
-  for(let i=0;i<N;i++){
-    const a=rr()*6.2831853,rim=rr()<.72;
-    const rad=rim?R*(.58+.42*Math.sqrt(rr())):1.5+Math.sqrt(rr())*3.2;
-    const x=Math.cos(a)*rad,z=Math.sin(a)*rad;
-    const phase=rr(),speed=.5+rr()*.6;
-    for(let k=0;k<2;k++){const j=i*2+k;pos[j*3]=x;pos[j*3+1]=0;pos[j*3+2]=z;ph[j]=phase;sp[j]=speed;en[j]=k;}
-  }
-  const g=new THREE.BufferGeometry();
-  g.setAttribute('position',new THREE.BufferAttribute(pos,3));
-  g.setAttribute('aPhase',new THREE.BufferAttribute(ph,1));
-  g.setAttribute('aSpeed',new THREE.BufferAttribute(sp,1));
-  g.setAttribute('aEnd',new THREE.BufferAttribute(en,1));
-  const m=new THREE.ShaderMaterial({transparent:true,depthWrite:false,fog:false,uniforms:{
-      uWT:weatherU.uWT,uTop:{value:TOP},uH:{value:H},uStreak:{value:STREAK},uColor:{value:new THREE.Color(0xd4dce2)}},
-    vertexShader:`uniform float uWT,uTop,uH,uStreak;attribute float aPhase,aSpeed,aEnd;varying float vA;
-void main(){float frac=fract(uWT*aSpeed+aPhase);float y=uTop-frac*uH-aEnd*uStreak;
-vec4 wp=modelMatrix*vec4(position.x,y,position.z,1.0);gl_Position=projectionMatrix*viewMatrix*wp;
-vA=(1.0-abs(frac*2.0-1.0));}`,
-    fragmentShader:`uniform vec3 uColor;varying float vA;void main(){gl_FragColor=vec4(uColor,0.26*vA);}`});
-  rainMesh=new THREE.LineSegments(g,m);
-  rainMesh.frustumCulled=false;rainMesh.renderOrder=2;rainMesh.visible=false;
-  scene.add(rainMesh);
 }
 function fitShadows(){
   if(!wood)return;
@@ -7236,7 +6248,6 @@ function fitShadows(){
   const cam=sun.shadow.camera;
   cam.left=-r;cam.right=r;cam.top=r;cam.bottom=-r;
   cam.near=.5;cam.far=80;   // stature: depth range covers 10u trees from a 30u sun
-  ebShadowWorldU.value.set(2*r,cam.far-cam.near);   // fix-40 · the still tier's blocker search works in metres
   const dir=new THREE.Vector3().copy(sun.position).sub(sun.target.position);
   if(dir.lengthSq()<1e-6)dir.set(-2.4,1.15,1.7);
   dir.normalize();
@@ -7525,7 +6536,7 @@ function rebuildSeason(){const v={az:orbit.az,el:orbit.el,dist:orbit.dist,tgt:or
 let interacting=false;
 function sizeToStage(){
   const w=Math.max(1,stage.clientWidth),h=Math.max(1,stage.clientHeight);
-  const cap=interacting&&!captureStill&&Q.get('dragdpr')!=='0'?Math.min(Qx.dpr,1):Qx.dpr;
+  const cap=interacting&&Q.get('dragdpr')!=='0'?Math.min(Qx.dpr,1):Qx.dpr;
   renderer.setPixelRatio(Math.min(devicePixelRatio||1,cap));
   renderer.setSize(w,h);
   camera.aspect=w/h;
@@ -7578,516 +6589,7 @@ function checksum(){
   return('00000000'+(h>>>0).toString(16)).slice(-8);
 }
 
-/* ================= Phase 2 · memory leaves (banyan.memories) =================
-   A memory is addressed by a STABLE BRANCH ANCHOR — { branchId, branchT,
-   side, localOffset } — never a foliage instance id. Branch ids are the
-   grower's registration order: deterministic for (species, seed, age) and
-   untouched by seasons and quality ("Counts change; the branch graph does
-   not"), so the same address re-seats on every rebuild of the same tree.
-   The renderer owns the golden memory leaf — a botanical blade of the tree,
-   petiole-joined to its branch anchor (Prompt 22: the separate additive
-   halo carrier is removed; state is the blade's own material) — its wind,
-   its pulse, its occlusion (true depth testing + raycast) and its picking.
-
-   Zero rng draws anywhere: geometry comes from the branch polylines, each
-   memory's animation phase from a pure hash of its id — the tree's own
-   deterministic build is untouched (checksum-identical).
-
-   Public surface (window.banyan.memories):
-     engineVersion              'eb-anchor-1'
-     set(records)               [{id, branchId, branchT, side, localOffset?, kind?}]
-     select(id | null)          brighter selected · quieter others
-     clear()
-     pick(x, y, radiusPx)       → {id, x, y, depth} | null   (canvas CSS px)
-     resolve(id)                → {world, screen:[x,y], depth, onStage,
-                                   occluded, visible} | false
-     candidates(n, opts)        → [{branchId, branchT, side, world, region}]
-     anchorNear([x,y,z])        → {branchId, branchT, side} | false
-     count()                    → resident record count
-*/
-const MEM_ENGINE_VERSION='eb-anchor-1';
-const MEM_MAX=64;
-const memState={records:[],selected:null,resolved:new Map(),buildTag:-1};
-let memBuildCounter=0;
-const memArcCache=new Map();
-function memArc(br){
-  let cum=memArcCache.get(br.id);
-  if(!cum){cum=[0];for(let i=1;i<br.pts.length;i++)cum.push(cum[i-1]+br.pts[i].distanceTo(br.pts[i-1]));memArcCache.set(br.id,cum)}
-  return cum;
-}
-const MEM_KINDS=new Set(['branch','strand']);   // crown wood only — never roots
-const memBranchOk=br=>!!br&&MEM_KINDS.has(br.kind)&&br.pts.length>1;
-function memHash01(id,salt){
-  let h=0x811c9dc5;
-  for(const ch of String(id)){h^=ch.codePointAt(0);h=Math.imul(h,0x01000193)}
-  h=Math.imul(h^(h>>>15),0x2c1b3c6d)^Math.imul(salt|0,0x9e3779b1);
-  return((h^(h>>>16))>>>0)/4294967296;
-}
-/** branch anchor → {p,t,sideV} on the CURRENT skeleton, or null. */
-function memPlace(rec){
-  const sk=lastSk;if(!sk)return null;
-  const br=sk.branches[rec.branchId];
-  if(!memBranchOk(br))return null;
-  const cum=memArc(br),total=cum[cum.length-1]||1e-6;
-  const sArc=clamp(rec.branchT,0,1)*total;
-  let i=1;while(i<cum.length-1&&cum[i]<sArc)i++;
-  const f=(sArc-cum[i-1])/Math.max(1e-6,cum[i]-cum[i-1]);
-  const p=br.pts[i-1].clone().lerp(br.pts[i],f);
-  const t=br.pts[i].clone().sub(br.pts[i-1]);
-  if(t.lengthSq()<1e-12)t.set(0,1,0);else t.normalize();
-  const up=Math.abs(t.y)>.92?new THREE.Vector3(1,0,0):new THREE.Vector3(0,1,0);
-  const sideV=new THREE.Vector3().crossVectors(t,up).normalize().multiplyScalar(rec.side>=0?1:-1);
-  // Prompt 22 · the leaf's base SITS ON its branch. The former ~0.4u radial
-  // "proud of the clump" push is the exact displacement that left blades
-  // visibly floating outside the canopy — a memory is a leaf OF the tree,
-  // joined to its anchor by a short petiole in the leaf geometry itself.
-  // `rec.localOffset` stays accepted (public record shape, persistence
-  // byte-identical) but no longer displaces the seat.
-  p.addScaledVector(sideV,.05);
-  return{p,t,sideV};
-}
-/* ---------- the golden memory leaf: ONE botanical blade of the tree ----------
-   Prompt 22 · the separate PlaneGeometry halo carrier is REMOVED and the
-   crossed billboard-insurance pair is retired. A memory reads as a leaf OF
-   the tree: the same elliptic Ficus silhouette, cross-curl, edge recurve,
-   droop and species tip the foliage sprigs use (buildSprigGeometry's lamina
-   formulas with banyan's own blade numbers), scaled to the top of the
-   sprigs' natural size family, and JOINED to its branch by a short petiole
-   whose base sits on the stable branch anchor. Selected/candidate state
-   lives in the blade's own material (gold, luminance, restrained pulse) —
-   no stacked mesh, no billboard, no screen-space carrier. */
-function memLeafGeometry(){
-  // banyan foliage contract (SPECIES.banyan.foliage): blade{length:.22,
-  // widthRatio:.66,outline:'elliptic',keel:.3,recurve:.12,droop:.05},
-  // fx{tipStart:.88,tipW:.5}. A grown blade reaches .22×1.22×1.2≈.32 —
-  // the memory blade sits at that top of the family: L=.30.
-  const L=.30,WR=.66,KEEL=.3,REC=.12,DROOP=.05,LIFT=.03,BOW=.04,TS=.88,TW=.5,PL=.07;
-  const maxHW=.5*L*WR;
-  const hw=u=>maxHW*Math.pow(Math.sin(Math.PI*Math.pow(u,.95)),.66)*(1-smoothstep(u,TS,TS+.16)*(1-TW));
-  const LSEG=10,WSEG=4;
-  const pos=[],uv=[],idx=[];
-  // petiole: a slim tapered strip from the branch seat (origin) to the blade
-  // base — the visible join that keeps the leaf OF the tree. uv=(0,.5) ⇒ the
-  // fragment's v=0 midrib tone, so it reads as a stalk, not as lamina.
-  {
-    const P0=pos.length/3;
-    for(let i=0;i<=2;i++){
-      const u=i/2,x=u*PL,y=-Math.sin(u*Math.PI)*.008,w=.016*(1-u*.35);
-      for(const sgn of[-1,1]){pos.push(x,y,sgn*w);uv.push(0,.5)}
-    }
-    for(let i=0;i<2;i++){const a=P0+i*2;idx.push(a,a+1,a+2,a+1,a+3,a+2)}
-  }
-  // lamina: the sprig grid formulas with fixed (deterministic, rng-free)
-  // shape numbers — parabolic cross-curl, soft edge recurve, droop + lift,
-  // gentle longitudinal arch. Zero rng draws, like the whole subsystem.
-  const B0=pos.length/3;
-  for(let iu=0;iu<=LSEG;iu++){
-    const u=iu/LSEG,w=hw(u);
-    for(let iv=0;iv<=WSEG;iv++){
-      const v01=iv/WSEG,v=v01*2-1,av=Math.abs(v);
-      const y=av*av*w*KEEL-Math.pow(smoothstep(av,.4,1),1.6)*w*REC
-             -u*u*L*DROOP+(1-u)*(1-u)*L*LIFT+Math.sin(u*Math.PI)*L*BOW;
-      pos.push(PL+u*L,y,v*w);uv.push(u,v01);
-    }
-  }
-  for(let iu=0;iu<LSEG;iu++)for(let iv=0;iv<WSEG;iv++){
-    const a=B0+iu*(WSEG+1)+iv,b=a+WSEG+1;
-    idx.push(a,b,a+1,b,b+1,a+1);
-  }
-  const g=new THREE.BufferGeometry();
-  g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));
-  g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));
-  g.setIndex(idx);
-  g.computeVertexNormals();
-  return g;
-}
-const memU={uT:windU.uT,uWind:windU.uWind,uWDir:windU.uWDir,
-  uPulse:{value:reducedMotion?0:1},uDim:{value:0}};
-let memLeaves=null;
-function memBuildMeshes(){
-  if(memLeaves)return;
-  const leafGeo=memLeafGeometry();
-  leafGeo.setAttribute('aMState',new THREE.InstancedBufferAttribute(new Float32Array(MEM_MAX),1));
-  leafGeo.setAttribute('aMPhase',new THREE.InstancedBufferAttribute(new Float32Array(MEM_MAX),1));
-  const leafMat=new THREE.ShaderMaterial({uniforms:memU,side:THREE.DoubleSide,
-    vertexShader:`
-attribute float aMState;attribute float aMPhase;
-varying vec2 vUv;varying float vState;varying float vPh;
-uniform float uT;uniform float uWind;uniform vec3 uWDir;
-${GUST_GLSL}
-void main(){
-  vUv=uv;vState=aMState;vPh=aMPhase;
-  vec3 p=position;
-  vec4 wp0=modelMatrix*instanceMatrix*vec4(0.0,0.0,0.0,1.0);
-  float g=gustW(uT*(0.55+0.9*uWind),aMPhase*6.2831,wp0.xyz);
-  float fl=uWind*(0.10+0.16*uv.x)*sin(uT*(2.1+1.6*aMPhase)+aMPhase*6.2831);
-  p.y+=fl*uv.x*0.22;
-  vec4 wp=modelMatrix*instanceMatrix*vec4(p,1.0);
-  wp.xyz+=uWDir*(g*uWind*0.09)+vec3(0.0,-abs(g)*uWind*0.02,0.0);
-  gl_Position=projectionMatrix*viewMatrix*wp;
-}`,
-    fragmentShader:`
-varying vec2 vUv;varying float vState;varying float vPh;
-uniform float uT;uniform float uPulse;uniform float uDim;
-void main(){
-  float u=vUv.x,v=abs(vUv.y*2.0-1.0);
-  float cand=step(1.5,vState);
-  float sel=step(0.5,vState)*(1.0-cand);
-  // Deep amber pigment — blue stays LOW so ACES+sRGB cannot wash the leaf
-  // into the cream of the Remembering-Hour sky (sky reads r-b≈56; the leaf
-  // must hold r-b≥90 in delivered pixels to stay unmistakably gold).
-  vec3 gold=mix(vec3(0.82,0.55,0.10),vec3(0.97,0.74,0.16),u*0.55+0.2);
-  gold=mix(gold,vec3(0.99,0.84,0.30),cand*0.5);          // candidates: paler gold
-  float rib=smoothstep(0.10,0.0,v)*0.35;
-  gold=mix(gold,vec3(0.55,0.36,0.08),rib);
-  gold+=vec3(0.10,0.06,0.00)*smoothstep(0.55,1.0,v)*0.25;
-  // The blade breathes DOWNWARD from its calibrated base — an upward swing
-  // would carry it over the ACES shoulder into cream at pulse-max, making
-  // the gold flicker in and out of legibility as it breathes.
-  float pulse=1.0-(uPulse*(0.11+0.05*cand))*(0.5+0.5*sin(uT*1.7+vPh*6.2831));
-  float quiet=mix(1.0,0.62,uDim*(1.0-sel)*(1.0-cand));
-  /* fix-16/A6 · THE LEAF GLOWS, INSTEAD OF HAVING LIGHT STACKED ON IT.
-
-     The old +0.15 lift was correct to be timid: pushing a gold blade brighter
-     with a neutral gain walks it up the ACES shoulder and it arrives cream —
-     which is exactly what made someone cut a hole in the middle of the halo
-     rather than solve this. The fix is to brighten and DESATURATE-PROOF at the
-     same time: gain the blade hard, and pull blue down and red up as it gains,
-     so the r-b separation that makes it read as gold widens with luminance
-     instead of collapsing. The blade ends up genuinely brighter than its
-     neighbours AND more golden, which is what "it should glow" means. */
-  float glow=sel+cand*0.55;
-  vec3 c=gold*pulse*quiet;
-  /* Prompt 22 · the 1.83x selected gain drove the blade's CORE past the
-     ACES shoulder into cream — delivered pixels lost the r-b separation
-     that makes it read gold (the phase2 goldish predicate measured only
-     ~6 qualifying px in the anchor box). Brighten LESS and hold the gold
-     HARDER: lower gain, stronger blue pull-down as it gains, so the
-     selected blade arrives brighter AND unmistakably more golden. */
-  c*=1.05+0.55*glow;
-  c=mix(c,c*vec3(1.14,0.92,0.38),glow*0.85);   // hold the gold as it brightens
-  gl_FragColor=vec4(c,1.0);
-  #include <tonemapping_fragment>
-  #include <colorspace_fragment>
-}`});
-  memLeaves=new THREE.InstancedMesh(leafGeo,leafMat,MEM_MAX);
-  memLeaves.count=0;memLeaves.castShadow=false;memLeaves.receiveShadow=false;
-  memLeaves.frustumCulled=false;memLeaves.renderOrder=2;
-  scene.add(memLeaves);
-  /* Prompt 22 · the separate additive halo carrier (PlaneGeometry quad,
-     view-aligned, additively blended) is GONE. Its rounded-square footprint
-     read as interface chrome and could sit visibly clear of the canopy; the
-     owner's decision makes selected/candidate emphasis live in the blade's
-     own material above. Exterior glow is not a product requirement. */
-}
-/** Re-seat every resident record on the current skeleton (≤64, cheap). */
-function memRefresh(){
-  memBuildMeshes();
-  memState.resolved.clear();
-  const m4=new THREE.Matrix4();
-  const xA=new THREE.Vector3(),yA=new THREE.Vector3(),zA=new THREE.Vector3();
-  const leafA=memLeaves.geometry.getAttribute('aMState');
-  const leafP=memLeaves.geometry.getAttribute('aMPhase');
-  let n=0;
-  for(const rec of memState.records){
-    const seat=memPlace(rec);
-    rec._slot=-1;
-    if(!seat)continue;
-    memState.resolved.set(rec.id,seat);
-    // Orientation, in the foliage's own language. The clump's sprig blades
-    // tilt toward the light (buildSprigGeometry: dir.x·.55+.62 along the
-    // shoot), so the memory blade GROWS the same way: petiole base ON the
-    // branch, growth direction = branch tangent blended with the crown
-    // radial and a whisper of up — the blade's outer half reaches its
-    // clump's face like every leaf around it, instead of hiding buried
-    // inside the bunch or floating proud of it. The lamina still faces
-    // OUTWARD (its +Y normal along the crown radial), so a memory leaf
-    // shows broadside exactly when its side of the tree faces the visitor
-    // — discoverable, not billboarded.
-    yA.set(seat.p.x,0,seat.p.z);
-    if(yA.lengthSq()<1e-6)yA.copy(seat.sideV);
-    yA.normalize();                                    // crown radial, out
-    xA.copy(seat.t).addScaledVector(yA,-seat.t.dot(yA));
-    if(xA.lengthSq()<1e-4)xA.set(0,1,0).addScaledVector(yA,-yA.y);
-    xA.normalize();                                    // shell tangent
-    xA.multiplyScalar(.55).addScaledVector(yA,.72);    // reach for light
-    xA.y+=.16;
-    xA.normalize();
-    yA.addScaledVector(xA,-yA.dot(xA)).normalize();    // lamina normal ⊥ growth
-    zA.crossVectors(xA,yA).normalize();
-    m4.makeBasis(xA,yA,zA).setPosition(seat.p);
-    // The leaf's visual centre: petiole (.07) + blade (.30) extend ~0.37
-    // along xA from the branch seat, so the blade's middle sits ~0.20 out —
-    // resolve()/pick() speak about where the gold actually is.
-    seat.c=seat.p.clone().addScaledVector(xA,.20);
-    memLeaves.setMatrixAt(n,m4);
-    const st=memState.selected===rec.id?1:(rec.kind==='candidate'?2:0);
-    leafA.setX(n,st);
-    const ph=memHash01(rec.id,7);
-    leafP.setX(n,ph);
-    rec._slot=n;n++;
-  }
-  memLeaves.count=n;
-  memLeaves.instanceMatrix.needsUpdate=true;
-  leafA.needsUpdate=true;
-  leafP.needsUpdate=true;
-  memLeaves.computeBoundingSphere();
-  memU.uDim.value=memState.selected!=null&&n>0?1:0;
-  memState.buildTag=memBuildCounter;
-}
-const memEnsureFresh=()=>{if(memState.buildTag!==memBuildCounter)memRefresh()};
-/* The crown's VISIBLE SHELL, per height band: an anchor is discoverable if
-   its radial distance reaches the 55th percentile of anchors at its height
-   — the outer half of the real foliage distribution, following the dome's
-   own profile (wide at the waist, narrow at the roof). Deterministic; one
-   pass per build. */
-let memShell=null,memShellTag=-1;
-function memShellThr(){
-  if(memShellTag===memBuildCounter&&memShell)return memShell;
-  const sk=lastSk,bands=new Map(),seen=new Set();
-  if(sk)for(const a of sk.anchors){
-    if(!a.p||seen.has(a.p))continue;
-    seen.add(a.p);
-    const br=sk.branches[a.id];
-    if(!br||br.kind!=='branch'||a.depth<2)continue;
-    const b=Math.round(a.p.y/0.75);
-    if(!bands.has(b))bands.set(b,[]);
-    bands.get(b).push(Math.hypot(a.p.x,a.p.z));
-  }
-  const thr=new Map();
-  for(const [b,arr] of bands){arr.sort((x,y)=>x-y);thr.set(b,arr[Math.floor(arr.length*.55)]??0)}
-  memShell=thr;memShellTag=memBuildCounter;
-  return thr;
-}
-const memShellOk=p=>{
-  const thr=memShellThr();
-  const t=thr.get(Math.round(p.y/0.75));
-  return t==null?true:Math.hypot(p.x,p.z)>=t;
-};
-/* ---------- occlusion + projection (renderer truth) ---------- */
-const memRay=new THREE.Raycaster();
-function memOccluded(worldP,margin=.45,maxDapple=0){
-  const dir=worldP.clone().sub(camera.position);
-  const dist=dir.length();
-  dir.normalize();
-  memRay.set(camera.position,dir);
-  memRay.far=dist-margin;   // closer than the margin is the leaf's own bunch
-  const objs=[wood,foliage&&foliage.mesh,ground].filter(Boolean);
-  return memRay.intersectObjects(objs,false).length>maxDapple;
-}
-/* A leaf is VISIBLE when any of three probes along its blade (seat, centre,
-   near-tip) has a near-clear line to the camera — matching what the eye
-   sees: part of the blade showing through the canopy IS the leaf showing.
-
-   Prompt 22 · two-part rule, recalibrated for the branch-seated blade.
-   The old .45/.40 margins were tuned for a seat pushed ~0.4u proud of its
-   clump; the base now sits ON the branch anchor, so a probe ray usually
-   crosses a few blades of the leaf's own neighbourhood before open air.
-   (1) Intersections within the margin of the blade are its own sprig
-   bunch. (2) Up to two further blade crossings are DAPPLE — the close-
-   distance captures show blades reading plainly through a leaf or two of
-   their own cluster in slivers — while more is solid canopy.
-   The half-turn-orbit flip stays honest: a rear leaf's ray crosses the
-   whole crown, dozens of blades, far beyond any dapple allowance. */
-function memSeatOccluded(seat){
-  if(!memOccluded(seat.p,.45,2))return false;
-  if(!seat.c)return true;
-  if(!memOccluded(seat.c,.40,2))return false;
-  const tip=seat.p.clone().lerp(seat.c,1.7);
-  return memOccluded(tip,.40,2);
-}
-function memScreen(worldP){
-  const v=worldP.clone().project(camera);
-  const r=renderer.domElement.getBoundingClientRect();
-  return{x:(v.x*.5+.5)*r.width,y:(-v.y*.5+.5)*r.height,
-    inFrustum:v.z>-1&&v.z<1&&Math.abs(v.x)<=1.02&&Math.abs(v.y)<=1.02};
-}
-/* ---------- public API ---------- */
-const memoriesApi={
-  engineVersion:MEM_ENGINE_VERSION,
-  count:()=>memState.records.length,
-  set(records){
-    if(!Array.isArray(records))return false;
-    const clean=[];
-    for(const r of records.slice(0,MEM_MAX)){
-      if(!r||typeof r.id!=='string'||!Number.isFinite(r.branchId)||!Number.isFinite(r.branchT))continue;
-      clean.push({id:r.id,branchId:r.branchId|0,branchT:clamp(r.branchT,0,1),
-        side:r.side>=0?1:-1,
-        localOffset:Number.isFinite(r.localOffset)?r.localOffset:undefined,
-        kind:r.kind==='candidate'?'candidate':'memory'});
-    }
-    memState.records=clean;
-    if(memState.selected!=null&&!clean.some(r=>r.id===memState.selected))memState.selected=null;
-    memRefresh();
-    return true;
-  },
-  select(id){
-    memState.selected=id==null?null:String(id);
-    if(memState.selected!=null&&!memState.records.some(r=>r.id===memState.selected))memState.selected=null;
-    memRefresh();
-    return true;
-  },
-  clear(){memState.records=[];memState.selected=null;memRefresh();return true},
-  /* QA introspection: per-record slot, drawn state and instance position. */
-  _slots(){
-    memEnsureFresh();
-    const m4=new THREE.Matrix4(),v=new THREE.Vector3();
-    return memState.records.map(r=>{
-      const s=r._slot;
-      if(s==null||s<0)return{id:r.id,slot:-1};
-      memLeaves.getMatrixAt(s,m4);v.setFromMatrixPosition(m4);
-      return{id:r.id,slot:s,kind:r.kind,
-        state:memLeaves.geometry.getAttribute('aMState').getX(s),
-        p:[+v.x.toFixed(3),+v.y.toFixed(3),+v.z.toFixed(3)],
-        count:memLeaves.count,sel:memState.selected};
-    });
-  },
-  resolve(id){
-    memEnsureFresh();
-    const rec=memState.records.find(r=>r.id===id);
-    if(!rec)return false;
-    const seat=memState.resolved.get(rec.id);
-    if(!seat)return false;
-    const P=seat.c||seat.p;
-    const sc2=memScreen(P);
-    const occ=memSeatOccluded(seat);
-    return{world:[P.x,P.y,P.z],screen:[sc2.x,sc2.y],
-      depth:camera.position.distanceTo(P),
-      onStage:sc2.inFrustum,occluded:occ,visible:sc2.inFrustum&&!occ};
-  },
-  pick(px,py,radiusPx=22){
-    memEnsureFresh();
-    if(!memState.records.length)return null;
-    const r=renderer.domElement.getBoundingClientRect();
-    const ndc=new THREE.Vector2((px/Math.max(1,r.width))*2-1,-(py/Math.max(1,r.height))*2+1);
-    memRay.setFromCamera(ndc,camera);
-    memRay.far=Infinity;
-    const objs=[wood,foliage&&foliage.mesh,ground,memLeaves].filter(Boolean);
-    const hits=memRay.intersectObjects(objs,false);
-    if(hits.length&&hits[0].object===memLeaves){
-      const rec=memState.records.find(x=>x._slot===hits[0].instanceId);
-      if(rec)return{id:rec.id,x:px,y:py,depth:hits[0].distance};
-    }
-    let best=null;
-    for(const rec of memState.records){
-      const seat=memState.resolved.get(rec.id);
-      if(!seat)continue;
-      const P=seat.c||seat.p;
-      const sc2=memScreen(P);
-      if(!sc2.inFrustum)continue;
-      const d=Math.hypot(sc2.x-px,sc2.y-py);
-      if(d>radiusPx)continue;
-      if(memSeatOccluded(seat))continue;
-      if(!best||d<best.d)best={id:rec.id,x:sc2.x,y:sc2.y,d,depth:camera.position.distanceTo(P)};
-    }
-    return best?{id:best.id,x:best.x,y:best.y,depth:best.depth}:null;
-  },
-  candidates(n=3,opts={}){
-    const sk=lastSk;if(!sk)return[];
-    const st=statureProbe()||{};
-    const yLo=(st.crownBottomY??2)+.5,yHi=(st.totalH??9)-.6;
-    const rBase=st.crownR90??st.reach??6;
-    const rHi=rBase*.9,rLo=rBase*.25;
-    const pool=[],seen=new Set();
-    for(const a of sk.anchors){
-      if(!a.p||seen.has(a.p))continue;
-      seen.add(a.p);
-      const br=sk.branches[a.id];
-      if(!br||br.kind!=='branch'||a.depth<2)continue;
-      const rr2=Math.hypot(a.p.x,a.p.z);
-      if(a.p.y<yLo||a.p.y>yHi||rr2<rLo||rr2>rHi)continue;
-      if(!memShellOk(a.p))continue;   // visible-shell anchors only
-      pool.push(a);
-    }
-    pool.sort((a,b)=>memHash01(a.id*131+Math.round(a.tip*97),3)-memHash01(b.id*131+Math.round(b.tip*97),3));
-    const chosen=[],exclude=new Set(opts.excludeBranches||[]);
-    for(const a of pool){
-      if(chosen.length>=n)break;
-      if(exclude.has(a.id))continue;
-      const th=Math.atan2(a.p.z,a.p.x);
-      const spaced=chosen.every(c=>{
-        let d=Math.abs(th-c._th)%(Math.PI*2);
-        if(d>Math.PI)d=Math.PI*2-d;
-        return d>.8&&c.branchId!==a.id;
-      });
-      if(!spaced)continue;
-      const region=a.p.y<yLo+(yHi-yLo)*.33?'low':a.p.y>yLo+(yHi-yLo)*.66?'high':'mid';
-      chosen.push({branchId:a.id,branchT:+a.tip.toFixed(4),
-        side:memHash01(a.id,11)<.5?-1:1,
-        world:[a.p.x,a.p.y,a.p.z],region,_th:th});
-    }
-    return chosen.map(({_th,...c})=>c);
-  },
-  /* Phase 4 · anchor capacity probe. How many memories can this tree
-     truly hold? Counts the shell-eligible anchors (the same eligibility
-     anchorNear/candidates enforce) and, greedily in deterministic order,
-     how many fit with the product's 0.6 u breathing space. The resident
-     cap is MEM_MAX (64); Gold trees must offer MEM_MAX + 25 % ≥ 80
-     spaced anchors so every memory always has somewhere honest to live. */
-  capacity(limit=100){
-    // spaced counting stops at `limit` (default 100): the product gate is
-    // MEM_MAX + 25 % = 80, so a count of 100 already proves generous
-    // headroom — the full greedy over tens of thousands of anchors would
-    // only burn sweep time. Pass Infinity for the exhaustive count.
-    const sk=lastSk;if(!sk)return{shell:0,spaced:0,max:MEM_MAX,limit};
-    const seen=new Set();
-    const pool=[];
-    for(const a of sk.anchors){
-      if(!a.p||seen.has(a.p))continue;
-      seen.add(a.p);
-      const br=sk.branches[a.id];
-      if(!br||br.kind!=='branch'||a.depth<2)continue;
-      if(!memShellOk(a.p))continue;
-      pool.push(a);
-    }
-    pool.sort((x,y)=>x.id-y.id||x.tip-y.tip);
-    const kept=[];
-    for(const a of pool){
-      if(kept.length>=limit)break;
-      let ok2=true;
-      for(const k of kept)if(k.p.distanceTo(a.p)<0.6){ok2=false;break}
-      if(ok2)kept.push(a);
-    }
-    return{shell:pool.length,spaced:kept.length,max:MEM_MAX,limit};
-  },
-  anchorNear(point,opts={}){
-    const sk=lastSk;
-    if(!sk||!Array.isArray(point)||point.length<3||!point.every(Number.isFinite))return false;
-    const P=new THREE.Vector3(point[0],point[1],point[2]);
-    // A hint anywhere in the crown maps to the nearest anchor of the
-    // VISIBLE SHELL in that direction (a trunk-hugging hint stays the most
-    // sheltered choice that can still be found on orbit). `opts.exclude`
-    // ["branchId:branchT", …] keeps other memories' leaves clear — both the
-    // exact anchors and a 0.6 u breathing space around each, so two
-    // memories can never melt into one glow.
-    const exclude=new Set(opts.exclude||[]);
-    const excludePts=[];
-    for(const key of exclude){
-      const ix=key.indexOf(':');
-      if(ix<1)continue;
-      const seat=memPlace({branchId:+key.slice(0,ix),branchT:+key.slice(ix+1),side:1,localOffset:.0601});
-      if(seat)excludePts.push(seat.p);
-    }
-    let best=null;
-    const seen=new Set();
-    for(const a of sk.anchors){
-      if(!a.p||seen.has(a.p))continue;
-      seen.add(a.p);
-      const br=sk.branches[a.id];
-      if(!br||br.kind!=='branch'||a.depth<2)continue;
-      if(!memShellOk(a.p))continue;
-      if(exclude.has(a.id+':'+(+a.tip.toFixed(4))))continue;
-      if(excludePts.some(q=>q.distanceTo(a.p)<0.6))continue;
-      const d=a.p.distanceTo(P);
-      if(!best||d<best.d-1e-9||(Math.abs(d-best.d)<1e-9&&(a.id<best.a.id||(a.id===best.a.id&&a.tip<best.a.tip))))
-        best={d,a};
-    }
-    if(!best)return false;
-    return{branchId:best.a.id,branchT:+best.a.tip.toFixed(4),
-      side:memHash01(best.a.id*17+Math.round(best.a.tip*89),5)<.5?-1:1};
-  },
-};
-
+const ANCHOR_ENGINE_VERSION='eb-anchor-1';
 
 /* boot */
 mark('boot');
@@ -8182,7 +6684,7 @@ function ebCompileSliced(done){
   requestAnimationFrame(step);
 }
 const compileMode=Q.get('compile');
-if(captureStill||compileMode==='sync'||(compileMode!=='async'&&compileMode!=='sliced'&&ebProgramCacheWarm())){mark('compile:sync');finishBoot()}
+if(compileMode==='sync'||(compileMode!=='async'&&compileMode!=='sliced'&&ebProgramCacheWarm())){mark('compile:sync');finishBoot()}
 else if(compileMode==='async'){mark('compile:async');window.__treeBootPending?.();renderer.compileAsync(scene,camera).then(finishBoot,finishBoot)}
 else{mark('compile:sliced');window.__treeBootPending?.();ebCompileSliced(finishBoot)}
 
@@ -8395,9 +6897,6 @@ renderer.setAnimationLoop(()=>{
   if(document.hidden||!bootCompiled){clock.getDelta();return}   // fix-40/F3 · no frame before the programs are ready
   const dt=Math.min(clock.getDelta(),.1);
   windU.uT.value+=dt;
-  // §7E.3 · advance the weather clock UNLESS this is a still (reduced-motion or a
-  // fulfilment capture) — a frozen clock gives a pinned, reproducible frame.
-  if(!(reducedMotion||captureStill))weatherU.uWT.value+=dt;
   fpsA+=(1/Math.max(dt,1e-4)-fpsA)*.05;
   if(horFadeCam)horFadeU.value.set(orbit.dist+horFadeCam[0],orbit.dist+horFadeCam[1]);
   if(camMode==='inside')applyInside();
@@ -8405,8 +6904,8 @@ renderer.setAnimationLoop(()=>{
   else{applyOrbit(dt);
     if(Math.abs(camera.fov-ORBIT_FOV)>.05){camera.fov+=(ORBIT_FOV-camera.fov)*.08;camera.updateProjectionMatrix()}}
   const now=performance.now();
-  // fix-40/F5 · at rest, draw every other frame (clocks, meter and camera ticked above)
-  idleNow=IDLE_CADENCE&&!captureStill&&camMode==='orbit'&&(now-lastInteractAt>400);
+  // at rest, draw every other frame (clocks, meter and camera ticked above)
+  idleNow=IDLE_CADENCE&&camMode==='orbit'&&(now-lastInteractAt>400);
   idleFrame=(idleFrame+1)&1;
   if(!(idleNow&&idleFrame))renderer.render(scene,camera);
   if(now-lastStats>800){
@@ -8431,12 +6930,6 @@ window.v3=window.banyan={
     const el=document.getElementById('p-age');if(el){el.value=ageY;document.getElementById('p-age-v').textContent=ageY}
     rebuildAll();return ageY},
   setScene(id){if(!SCENES[id]||(!REVIEW_MODE&&!PUBLIC_SCENE_IDS.has(id)))return false;sceneId=id;document.getElementById('p-scene').value=id;applyScene();buildEnvironment();return true},
-  /* §7E.2/§7E.3 · premium skin + weather. Colour/particle only — no rebuild, no
-     geometry change. Refusal (false) guards a look this build will not honour;
-     'none' returns to the base. applyScene re-applies the whole grade fresh so
-     repeated calls never compound. */
-  setSkin(id){const v=(id==null||id==='none')?'none':String(id);if(v!=='none'&&!PUBLIC_SKIN_IDS.has(v))return false;skinId=v;applyScene();return true},
-  setWeather(id){const v=(id==null||id==='none')?'none':String(id);if(v!=='none'&&!PUBLIC_WEATHER_IDS.has(v))return false;weatherId=v;applyScene();return true},
   setView(az,el,dist,tx,ty,tz){const v=[az,el,dist];if(!v.every(Number.isFinite))return false;
     if(tx!=null&&![tx,ty??orbit.gTgt.y,tz??orbit.gTgt.z].every(Number.isFinite))return false;
     // fix-40/F5 · the adapter pushes every frame; only a pose that actually MOVED counts as interaction
@@ -8470,69 +6963,12 @@ window.v3=window.banyan={
     buildEnvironment();applyScene();
     return true;
   },
-  /* 7C F1 · `lantern` (bool) and `lanternSocket` are the independent companion
-     slot; omit them and the call behaves exactly as it always did. Refused
-     input still returns false and changes nothing. */
-  setMemorialObject(o){
-    if(!o||typeof o!=='object')return false;
-    const type=o.type??'none';
-    if(!PUBLIC_OBJECT_TYPES.has(type))return false;
-    const socket=o.socket??objectState.socket;
-    if(!OBJECT_SOCKETS.has(socket))return false;
-    let emblem=objectState.emblem;
-    if(type==='faith'){
-      emblem=o.emblem??emblem;
-      if(!EMBLEM_IDS.has(emblem))return false;   // faith requires a real emblem
-    }else if(o.emblem!=null&&!EMBLEM_IDS.has(o.emblem))return false;
-    else if(o.emblem!=null)emblem=o.emblem;
-    let lantern=objectState.lantern;
-    if(o.lantern!=null){
-      if(typeof o.lantern!=='boolean')return false;
-      lantern=o.lantern;
-    }
-    let lanternSocket=objectState.lanternSocket;
-    if(o.lanternSocket!==undefined){
-      if(o.lanternSocket===null)lanternSocket=null;
-      else if(!OBJECT_SOCKETS.has(o.lanternSocket))return false;
-      else lanternSocket=o.lanternSocket;
-    }
-    /* fix-16/A8 · the toy's species variant and the print's kind are VARIANTS
-       of their object, not separate objects. Malformed input is refused whole,
-       the same as every other field here: a host must never be able to show a
-       control this build will not honour. */
-    let toyKind=objectState.toyKind;
-    if(o.toyKind!=null){if(!TOY_KINDS.has(o.toyKind))return false;toyKind=o.toyKind}
-    let print=objectState.print;
-    if(o.print!=null){if(o.print!=='paw'&&o.print!=='nose')return false;print=o.print}
-    objectState={type,emblem,socket,lantern,lanternSocket,toyKind,print};
-    buildEnvironment();applyScene();
-    return true;
-  },
-  setNameplate(o){
-    if(!o||typeof o!=='object')return false;
-    let shape=plateState.shape??'tablet';                     // §7C.4
-    if(o.shape!=null){if(!NAMEPLATE_SHAPES[o.shape])return false;shape=o.shape;}
-    /* fix-16/A9 · the portrait. Prompt 17 serves an approved photo as an
-       inline data: URI, and this build accepts ONLY that — an http(s) URL
-       would break the one promise the offline archive makes, that the file is
-       "yours to keep even if this site one day does not". A malformed value
-       returns false and changes nothing, like every other refusal here.
-       Passing null clears it. Decoding is asynchronous; the plate re-engraves
-       when the image arrives, so a slow decode never blocks the frame. */
-    let photo=plateState.photo??null;
-    if(o.photo!==undefined){
-      if(o.photo===null||o.photo==='')photo=null;
-      else if(typeof o.photo!=='string')return false;
-      else if(!/^data:image\/(png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=\s]+$/.test(o.photo))return false;
-      else if(o.photo.length>1400000)return false;            // ~1 MB of base64; §2.4 caps the source at 512 KB
-      else photo=o.photo;
-    }
-    plateState={name:plateClip(o.name,60),from:plateClip(o.from??o.dates,12),to:plateClip(o.to,12),shape,photo};
-    emPlatePhotoTex=null;
-    buildEnvironment();applyScene();
-    if(photo)emLoadPlatePhoto(photo);
-    return true;
-  },
+  
+  // This study refuses all memorial content; rejected input leaves the base tree unchanged.
+  setMemorialObject(){return false},
+  setNameplate(){return false},
+  memories:{set(){return false},select(){return false},clear(){return true},
+    candidates(){return[]},pick(){return null},resolve(){return false},count(){return 0}},
   /* Phase 4 · the freeze contract. An explicit geometry version plus a
      deterministic digest of EVERY input the Gold curation depends on:
      trunk/root vertices, branch topology, canopy instances, the stable
@@ -8604,7 +7040,7 @@ window.v3=window.banyan={
       const parts={wood:w.hex(),branchTopology:t.hex(),canopy:c.hex(),anchors:a.hex(),stature:s.hex(),sockets:k2.hex()};
       const all=F();
       for(const key of Object.keys(parts))for(const ch of parts[key])all.mix(ch.codePointAt(0));
-      return{engineGeometryVersion:'eb-geo-1',anchorEngineVersion:MEM_ENGINE_VERSION,
+      return{engineGeometryVersion:'eb-geo-1',anchorEngineVersion:ANCHOR_ENGINE_VERSION,
         species:speciesId,seed,quality:Qx.id,season:seasonId,
         branches:lastSk?lastSk.branches.length:0,anchorCount:lastSk?lastSk.anchors.length:0,
         socketDetail,...parts,combined:all.hex()};
@@ -8628,37 +7064,8 @@ window.v3=window.banyan={
       mix(Math.round((p.rotation?.y??0)*8192))}
     return('00000000'+(h>>>0).toString(16)).slice(-8);
   },
-  /* §7E · deterministic witness for the AMBIANCE look (skin grade + weather) —
-     the colour/particle twin of checksum()/environmentChecksum(). Same
-     (seed, skin, weather) ⇒ same digest, so a paid look is pinned and cannot
-     silently drift. Geometry is untouched: checksum() stays byte-identical. */
-  ambianceChecksum(){
-    let h=0x811c9dc5;const mix=s=>{for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,0x01000193)}};
-    mix('skin:'+skinId);mix('weather:'+weatherId);mix('seed:'+seed);
-    return('00000000'+(h>>>0).toString(16)).slice(-8);
-  },
-  /** QA probe: where the memorial objects actually landed (+clearances). */
-  placementReport(){
-    if(!emPlacements)return null;
-    const out={};
-    for(const k of Object.keys(emPlacements)){
-      const p=emPlacements[k];
-      out[k]={x:+p.x.toFixed(4),z:+p.z.toFixed(4),az:+p.az.toFixed(4),
-        clearance:+p.clearance.toFixed(4),slope:+p.slope.toFixed(4),fallback:!!p.fallback};
-      // Phase 7 F8 · how crowded the arrival wedge measured, and the stand-off
-      // that measurement bought — so the fix is auditable, not just visible.
-      if(p.curtain!=null)Object.assign(out[k],{curtain:p.curtain,wedgeRoots:p.wedgeRoots,standoff:p.standoff});
-      // 5-6 F2 · the companion lamp records the gap it kept from the stone.
-      if(p.companionOf)Object.assign(out[k],{companionOf:p.companionOf,plateGap:p.plateGap});
-    }
-    out.ground=groundId;out.approach=approachId;out.approachAz=approachAz;
-    out.path=emPathInfo?{...emPathInfo}:null;
-    out.object={...objectState};out.plateText={...plateState};
-    out.emblemEnvelope=emEmblemEnv?{...emEmblemEnv}:null;   // §7C.5
-    return out;
-  },
-  stature:()=>bootCompiled?statureProbe():null,   // fix-40/F3 · null until a frame has been drawn (ready = first frame, as before)
-  /* 3-4 I-P34-001/002 · SILHOUETTE PROBE. The Gold rules forbid a radial
+  stature:()=>bootCompiled?statureProbe():null,   // null until a frame has been drawn (ready = first frame, as before)
+  /* SILHOUETTE PROBE. The Gold rules forbid a radial
      umbrella/dome form, but nothing in the renderer could MEASURE one, so
      "seed 490 is an even, symmetric dome" was a sentence in a manifest rather
      than a screenable property and 2 400 candidates were ranked without it.
@@ -8739,30 +7146,13 @@ window.v3=window.banyan={
       topSpread:+((Math.max(...top)-Math.min(...top))/Math.max(span,1e-4)).toFixed(4),
       r90,top,binCount:Array.from(bN),profile};
   },
-  memories:memoriesApi,
-  // props 3 = 7C F1: the emblem slot and the companion-lantern slot are
-  // INDEPENDENT, so an emblem and a lamp can stand together (see
-  // setMemorialObject's `lantern` / `lanternSocket`).
-  /* fix-16/A8 · props 4 announces the pet objects. The explicit id lists are
-     new and deliberate: a Studio talking to an older build must be able to ASK
-     what this renderer can draw rather than infer it from a version number,
-     which is the contract prompt 10 established for the companion lantern and
-     the only way to build a picker that never offers a missing object.
-     nameplate 2 announces the portrait recess (A9). */
-  capabilities:{memories:1,ground:2,props:4,nameplate:2,skin:0,weather:0,
-    objects:['none','stone','lantern','paw','toy','collar','bowl'],
-    toyKinds:['ball','bone','yarn'],printKinds:['paw','nose'],
-    nameplateShapes:Object.keys(NAMEPLATE_SHAPES),
-    /* Recorded as REFUSED so a host cannot mistake absence for oversight:
-       angel and cherub statuary, and any literal rainbow-bridge structure, are
-       deliberately not built and are not reachable through any id. */
-    refusedObjects:['angel','cherub','rainbow-bridge','faith']},   // 2 = Phase 5 full surface; §7E skin+weather; faith emblems live only in the reviewed memorial product
-  setInteracting,   // fix-40/F6 · the adapter says when a drag starts and ends
+  capabilities:{memories:0,ground:2,props:0,nameplate:0,
+    objects:['none']},
+  setInteracting,   // marks when a drag starts and ends
   stats:()=>({...buildInfo,calls:renderer.info.render.calls,fps:Math.round(fpsA),idle:idleNow,interacting,pixelRatio:renderer.getPixelRatio(),barkBaked:!!(barkMat&&barkMat.userData.barkBaked),
     sprigs:foliage?foliage.mesh.count:0,quality:Qx.id,species:speciesId,seed,scene:sceneId,season:seasonId,
-    ground:groundId,approach:approachId,object:{...objectState},nameplate:!!plateState.name,
-    skin:skinId,weather:weatherId}),
-  /* fix-16 · barkAtlas is exposed for the same reason wood and ground are: it is
+    ground:groundId,approach:approachId}),
+  /* barkAtlas is exposed for the same reason wood and ground are: it is
      the only way a QA pass can look at the baked tile's four packed channels
      separately, and guessing which of them is showing its lattice costs a
      build per guess. Read-only accessor on the existing debug seam. */
