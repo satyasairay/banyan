@@ -11,7 +11,7 @@
   "quality": "balanced",
   "currentBuild": {
     "file": "banyan_v5.html",
-    "sha256": "7ab36963f868a8f14e500fe40abc9db7466b8cbeeba0933c7ce1fb556243e742",
+    "sha256": "e066950d35fad0d2d9e4743e9798551bf242f014ad0f921dcbbab8bf58761148",
     "hashNormalization": "LF",
     "witness": "docs/witness/digests.json"
   },

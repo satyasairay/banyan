@@ -21,6 +21,10 @@ to orbit, tap a leaf for botanical details, press "copy tree link" for a link th
 carries the seed, scene and season (the ground is not in the copied link yet — add
 it by hand). Deep links carry `?seed=&scene=&season=`.
 
+Season changes preserve the view, including its lens. Reset returns to the
+low-eye opening. Regrowing, choosing another tree or seed, changing quality,
+or resizing the page re-fits the opening.
+
 ## Gallery
 
 Each caption is a command: put it on the standalone's URL and the same tree
@@ -174,8 +178,8 @@ hashing a checkout; a raw CRLF file hash will differ.
 
 | File | SHA-256 (LF-normalized content) |
 |---|---|
-| `banyan_v5.html` | `7ab36963f868a8f14e500fe40abc9db7466b8cbeeba0933c7ce1fb556243e742` |
-| `banyan_v5.source.html` | `efbb789f7a3076cbd65a67f1492d5dc6113c52d571fc5b44cf7f55394197ce62` |
+| `banyan_v5.html` | `e066950d35fad0d2d9e4743e9798551bf242f014ad0f921dcbbab8bf58761148` |
+| `banyan_v5.source.html` | `339af9aefc413f004749bcb8a4890a7193f22852dcc7edecd2d57c09658af05b` |
 
 ## The evolution
 

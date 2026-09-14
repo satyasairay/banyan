@@ -1,5 +1,14 @@
 # Changelog
 
+## [study-15] — 2026-09-14 — the opening view is a low eye, and the ten previews are rendered from it without memorial objects
+
+- The opening fit uses a 1.2-unit eye, a 50-degree lens, a target at 60% of tree height and 8% crown-top headroom. Season round trips preserve the complete view. The ten Gold previews follow this fit.
+- LF-normalised source SHA-256: `339af9aefc413f004749bcb8a4890a7193f22852dcc7edecd2d57c09658af05b`.
+  LF-normalised runtime SHA-256: `e066950d35fad0d2d9e4743e9798551bf242f014ad0f921dcbbab8bf58761148`.
+  `npm run check`: IDENTICAL. Fresh witness: all ten balanced Gold seeds reproduce.
+
+Earlier entries below describe their historical builds.
+
 ## [study-14] — 2026-09-14 — document the study boundary and the absence of paid looks
 
 - The README describes the public refusals, retained gated data and the absence of paid palettes and weather effects.

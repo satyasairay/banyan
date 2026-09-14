@@ -5765,6 +5765,7 @@ renderer.domElement.tabIndex=0;
 renderer.domElement.addEventListener('webglcontextlost',e=>{e.preventDefault();window.__treeBootFail?.()});
 const scene=new THREE.Scene();
 const camera=new THREE.PerspectiveCamera(46,1,.09,300);   // stature: far plane covers 6–10u trees + fog
+let orbitFov=46,openingView=false,previousFit=null,sceneFogScale=1;
 
 /* Phase 1 · landscape sky dome — a fog-immune gradient with a bloom aligned
    to the scene's real sun and an ordered dither against banding. Colours
@@ -6061,8 +6062,8 @@ function applyScene(){
   }
   // v4.1/Q-02: fog distances scale with the fitted camera distance, so a farther
   // (small-screen) hero keeps crown/trunk contrast instead of drowning in atmosphere.
-  const fogK=Math.max(1,orbit.gDist/23);
-  /* fix-16/A5 · and the FOG is the same sky, for the same reason.
+  const fogK=Math.max(1,orbit.gDist/23);sceneFogScale=fogK;
+  /* and the FOG is the same sky, for the same reason.
 
      Fixing horU alone moved the far ground barely at all, because of the order
      three.js assembles the fragment shader: tonemapping, then colorspace, then
@@ -6172,21 +6173,22 @@ function fitShadows(){
 /* orbit camera (custom, dependency-free) */
 const orbit={az:.62,el:.28,dist:22,tgt:new THREE.Vector3(0,3.8,0),
   gAz:.62,gEl:.28,gDist:22,gTgt:new THREE.Vector3(0,3.8,0)};   // stature: fitCamera() re-targets after build
+function setViewLens(fov=46){
+  orbitFov=camera.fov=fov;openingView=false;camera.updateProjectionMatrix();
+}
 let hasReviewView=false;
 const reviewView=REVIEW_MODE?Q.get('view'):null;
 if(reviewView){const v=reviewView.split(',').map(Number);
-  if(v.length>=3&&v.slice(0,3).every(Number.isFinite)){orbit.gAz=orbit.az=v[0];orbit.gEl=orbit.el=clamp(v[1],-.75,1.35);orbit.gDist=orbit.dist=clamp(v[2],6,95);hasReviewView=true}
+  if(v.length>=3&&v.slice(0,3).every(Number.isFinite)){orbit.gAz=orbit.az=v[0];orbit.gEl=orbit.el=clamp(v[1],-.75,1.35);orbit.gDist=orbit.dist=clamp(v[2],6,95);hasReviewView=true;setViewLens()}
   if(hasReviewView&&v.length>=6&&v.slice(3,6).every(Number.isFinite)){orbit.gTgt.set(v[3],v[4],v[5]);orbit.tgt.set(v[3],v[4],v[5])}}
-function fitCamera(force){
-  if(hasReviewView&&!force)return;
-  // stature (§2.2): target ≈40% of tree height; distance auto-fits the bounding
-  // sphere so a 6u cherry and a 10u strangler both fill the frame with headroom.
+function fitPreviousCamera(){
+  // Preserve the explicit-view framing context used before the opening fit.
   const box=new THREE.Box3().setFromObject(wood);
   if(foliage&&foliage.mesh.count>0)box.expandByObject(foliage.mesh);
   const s=box.getSize(new THREE.Vector3()),c=box.getCenter(new THREE.Vector3());
   const r=Math.hypot(s.x,s.y,s.z)*.5+.001;
   const asp=Math.max(.45,camera.aspect);
-  const tanF=Math.tan(THREE.MathUtils.degToRad(camera.fov*.5));
+  const tanF=Math.tan(THREE.MathUtils.degToRad(46*.5));
   const vFit=r/tanF;
   const rW=Math.max(s.x,s.z)*.5+.001;
   const hFit=asp<1?(rW*1.18)/(tanF*asp):vFit;
@@ -6194,6 +6196,50 @@ function fitCamera(force){
   orbit.gTgt.set(c.x*.3,Math.max(1.9,box.max.y*(asp<1?.5:.44)),c.z*.3);
   orbit.gEl=.04;
 }
+
+let crownFitMesh=null,crownFitPoints=null;
+function openingCrownPoints(){
+  if(crownFitMesh===foliage.mesh&&crownFitPoints)return crownFitPoints;
+  const points=[],v=new THREE.Vector3(),matrix=new THREE.Matrix4(),positions=foliage.mesh.geometry.attributes.position;
+  for(let i=0;i<foliage.mesh.count;i++){
+    foliage.mesh.getMatrixAt(i,matrix);
+    for(let j=0;j<positions.count;j++){v.fromBufferAttribute(positions,j).applyMatrix4(matrix);points.push(v.x,v.y,v.z)}
+  }
+  crownFitMesh=foliage.mesh;return crownFitPoints=new Float64Array(points);
+}
+function fitCamera(force){
+  if(hasReviewView&&!force)return;
+  fitPreviousCamera();
+  previousFit={distance:orbit.gDist,target:orbit.gTgt.clone()};
+  // Explicit review poses retain their original lens and atmospheric fit.
+  if(!force&&REVIEW_MODE&&(Q.get('eye')==='1'||Q.get('lineup')==='1'))return;
+  if(!foliage||!foliage.mesh.count)return;
+  let height=-Infinity;
+  for(const branch of lastSk.branches)for(const point of branch.pts)height=Math.max(height,point.y);
+  const instances=foliage.mesh.instanceMatrix.array;
+  for(let i=0;i<foliage.mesh.count;i++)height=Math.max(height,instances[i*16+13]);
+  const target=height*.60,ca=Math.cos(.62),sa=Math.sin(.62),tanF=Math.tan(50*Math.PI/360),points=openingCrownPoints();
+  const eyeAt=h=>Math.max(1.2,(groundH?groundH(ca*h,sa*h):0)+.35);
+  // Fit the projected crown top at NDC .84: an 8% margin from the upper edge.
+  // A vertical fit deliberately permits crown-side cropping on narrow screens.
+  const projectedTop=h=>{
+    const eye=eyeAt(h),el=Math.atan2(eye-target,h),ce=Math.cos(el),se=Math.sin(el);let top=-Infinity;
+    for(let i=0;i<points.length;i+=3){
+      const dx=points[i]-ca*h,dy=points[i+1]-eye,dz=points[i+2]-sa*h;
+      const depth=-ca*ce*dx-se*dy-sa*ce*dz;if(depth<=.09)return Infinity;
+      top=Math.max(top,(-ca*se*dx+ce*dy-sa*se*dz)/(depth*tanF));
+    }
+    return top;
+  };
+  let lo=.1,hi=Math.max(8,height*2);
+  while(projectedTop(hi)>.84&&hi<512)hi*=2;
+  for(let i=0;i<44;i++){const mid=(lo+hi)/2;if(projectedTop(mid)>.84)lo=mid;else hi=mid}
+  openingView=true;orbitFov=camera.fov=50;camera.updateProjectionMatrix();
+  orbit.gAz=.62;orbit.gEl=Math.atan2(eyeAt(hi)-target,hi);orbit.gDist=Math.hypot(hi,eyeAt(hi)-target);
+  orbit.gTgt.set(0,target,0);
+  orbit.az=orbit.gAz;orbit.el=orbit.gEl;orbit.dist=orbit.gDist;orbit.tgt.copy(orbit.gTgt);
+}
+
 function applyOrbit(dt){
   const k=1-Math.exp(-dt*7);
   orbit.az+=(orbit.gAz-orbit.az)*k;
@@ -6432,9 +6478,16 @@ let syncSeasonControl=()=>{};
 }
 function rebuildAll(){build();buildEnvironment();applyScene();updateTitle()}
 function rebuildSeason(){const v={az:orbit.az,el:orbit.el,dist:orbit.dist,tgt:orbit.tgt.clone(),
-  gAz:orbit.gAz,gEl:orbit.gEl,gDist:orbit.gDist,gTgt:orbit.gTgt.clone()};
+  gAz:orbit.gAz,gEl:orbit.gEl,gDist:orbit.gDist,gTgt:orbit.gTgt.clone(),
+  fov:camera.fov,orbitFov,openingView,previousFit,sceneFogScale,
+  fog:scene.fog?scene.fog.clone():null};
+  // Retain the established fruit/foliage order when replacing the tree materials.
+  if(FRUIT_MAT&&leafMat&&FRUIT_MAT.id>leafMat.id){FRUIT_MAT.dispose();FRUIT_MAT=null}
   rebuildAll();orbit.az=v.az;orbit.el=v.el;orbit.dist=v.dist;orbit.tgt.copy(v.tgt);
-  orbit.gAz=v.gAz;orbit.gEl=v.gEl;orbit.gDist=v.gDist;orbit.gTgt.copy(v.gTgt);}
+  orbit.gAz=v.gAz;orbit.gEl=v.gEl;orbit.gDist=v.gDist;orbit.gTgt.copy(v.gTgt);
+  camera.fov=v.fov;orbitFov=v.orbitFov;openingView=v.openingView;previousFit=v.previousFit;
+  camera.updateProjectionMatrix();sceneFogScale=v.sceneFogScale;
+  scene.fog=v.fog;}
 
 /* resize */
 /* while a finger (or a mouse) is dragging, a dense display renders
@@ -6641,6 +6694,7 @@ if(REVIEW_MODE&&Q.get('figure')==='1'&&Q.get('lineup')!=='1'){
   scene.add(fig);
 }
 if(REVIEW_MODE&&Q.get('lineup')==='1'){
+  setViewLens();
   const ids=(Q.get('lineupIds')||Object.keys(SPECIES).join(',')).split(',').filter(k=>SPECIES[k]);
   const lFol=(Q.get('lineupFol')!=null?+Q.get('lineupFol'):.6)*Qx.sprigMul;
   const slots=[];
@@ -6693,6 +6747,7 @@ if(REVIEW_MODE&&Q.get('lineup')==='1'){
   orbit.gDist=orbit.dist=Math.max(fitH,fitW)*1.1;
 }
 if(REVIEW_MODE&&Q.get('eye')==='1'){
+  setViewLens();
   const ty=Math.max(canopyU.uCanC.value.y*.92,S.trunk.height*.8);
   const hx=Q.get('eyeDist')!=null?+Q.get('eyeDist'):Math.max(3.4,S.trunk.r0*4+2.4);
   const el=Math.atan2(1.6-ty,hx),d=Math.hypot(hx,1.6-ty);
@@ -6712,7 +6767,7 @@ if(REVIEW_MODE&&Q.get('probe')==='1'){
    stream-free fbm), zero rng draws. Toggle: panel button · key I · ?cam=inside.
    Any drag on the canvas hands control back to orbit. */
 let camMode='orbit',insideT0=0;
-const INSIDE_FOV=56,ORBIT_FOV=camera.fov;
+const INSIDE_FOV=56;
 /* v4.6: MANUAL monkey cam — you perch, you look, you climb. Drag = free look
    (up to nearly straight up, never through the ground), WASD/arrows = walk the
    air horizontally, Space/E = rise, Shift/Q = sink, wheel = glide along gaze.
@@ -6800,7 +6855,7 @@ renderer.setAnimationLoop(()=>{
   if(camMode==='inside')applyInside();
   else if(camMode==='explore')applyExplore(dt);
   else{applyOrbit(dt);
-    if(Math.abs(camera.fov-ORBIT_FOV)>.05){camera.fov+=(ORBIT_FOV-camera.fov)*.08;camera.updateProjectionMatrix()}}
+    if(Math.abs(camera.fov-orbitFov)>.05){camera.fov+=(orbitFov-camera.fov)*.08;camera.updateProjectionMatrix()}}
   const now=performance.now();
   // at rest, draw every other frame (clocks, meter and camera ticked above)
   idleNow=IDLE_CADENCE&&camMode==='orbit'&&(now-lastInteractAt>400);
@@ -6830,7 +6885,16 @@ window.v3=window.banyan={
   setScene(id){if(!SCENES[id]||(!REVIEW_MODE&&!PUBLIC_SCENE_IDS.has(id)))return false;sceneId=id;document.getElementById('p-scene').value=id;applyScene();buildEnvironment();return true},
   setView(az,el,dist,tx,ty,tz){const v=[az,el,dist];if(!v.every(Number.isFinite))return false;
     if(tx!=null&&![tx,ty??orbit.gTgt.y,tz??orbit.gTgt.z].every(Number.isFinite))return false;
-    // fix-40/F5 · the adapter pushes every frame; only a pose that actually MOVED counts as interaction
+    if(openingView){
+      // Explicit poses keep the prior 46-degree lens, default target and fog scale.
+      if(previousFit){
+        orbit.gTgt.copy(previousFit.target);orbit.tgt.copy(orbit.gTgt);
+        const scale=Math.max(1,previousFit.distance/23);
+        if(scene.fog){scene.fog.near*=scale/sceneFogScale;scene.fog.far*=scale/sceneFogScale}sceneFogScale=scale;
+      }
+    }
+    setViewLens();
+    // repeated view updates count as interaction only when the pose actually MOVED
     if(Math.abs(az-orbit.gAz)>1e-6||Math.abs(clamp(el,-.75,1.35)-orbit.gEl)>1e-6||Math.abs(clamp(dist,6,95)-orbit.gDist)>1e-5
       ||(tx!=null&&(Math.abs(tx-orbit.gTgt.x)>1e-5||Math.abs((ty??orbit.gTgt.y)-orbit.gTgt.y)>1e-5||Math.abs((tz??orbit.gTgt.z)-orbit.gTgt.z)>1e-5)))lastInteractAt=performance.now();
     orbit.gAz=az;orbit.gEl=clamp(el,-.75,1.35);orbit.gDist=clamp(dist,6,95);orbit.az=orbit.gAz;orbit.el=orbit.gEl;orbit.dist=orbit.gDist;
