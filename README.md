@@ -183,10 +183,9 @@ hashing a checkout; a raw CRLF file hash will differ.
 
 ## The evolution
 
-`banyan_v2.html` through `banyan_v4.html` are the engine's growth history —
-complete single-file artifacts from each earlier stage, kept as they were.
-`banyan_v5.html` is the current stage, as it matured in production through
-August 2026.
+The earlier single-file stages are no longer in the tree; they remain in the
+repository's history. The current v5 runtime bundles its dependency locally
+and downloads nothing.
 
 ## Public boundary
 

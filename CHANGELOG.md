@@ -1,5 +1,14 @@
 # Changelog
 
+## [study-17] — 2026-09-14 — the earlier single-file stages leave the tree
+
+- The earlier single-file stages are retained in repository history. The README now describes their removal. The source is unchanged. The build is reproduced and its records and ten-seed witness are refreshed.
+- LF-normalised source SHA-256: `cc3e12fc128d664b6e5ec223958d53107572f03f3978cf143f0aeddfc0f287fd`.
+  LF-normalised runtime SHA-256: `83fb1dda0351d4d73e77747e689b4b2db97ee09e3799d9d7ee75f98f91150f69`.
+  `npm run check`: IDENTICAL.
+
+Earlier entries below describe their historical builds.
+
 ## [study-16] — 2026-09-14 — the comments carry no private record
 
 - Comments retain renderer design facts while removing private process references, stale handles, broken prose and internal work-item tags. The remaining work-section labels, selection-history references, stale filter claim and dangling phrase are removed.
