@@ -178,8 +178,8 @@ hashing a checkout; a raw CRLF file hash will differ.
 
 | File | SHA-256 (LF-normalized content) |
 |---|---|
-| `banyan_v5.html` | `e066950d35fad0d2d9e4743e9798551bf242f014ad0f921dcbbab8bf58761148` |
-| `banyan_v5.source.html` | `339af9aefc413f004749bcb8a4890a7193f22852dcc7edecd2d57c09658af05b` |
+| `banyan_v5.html` | `83fb1dda0351d4d73e77747e689b4b2db97ee09e3799d9d7ee75f98f91150f69` |
+| `banyan_v5.source.html` | `cc3e12fc128d664b6e5ec223958d53107572f03f3978cf143f0aeddfc0f287fd` |
 
 ## The evolution
 

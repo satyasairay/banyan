@@ -1,5 +1,14 @@
 # Changelog
 
+## [study-16] — 2026-09-14 — the comments carry no private record
+
+- Comments retain renderer design facts while removing private process references, stale handles, broken prose and internal work-item tags. The remaining work-section labels, selection-history references, stale filter claim and dangling phrase are removed.
+- LF-normalised source SHA-256: `cc3e12fc128d664b6e5ec223958d53107572f03f3978cf143f0aeddfc0f287fd`.
+  LF-normalised runtime SHA-256: `83fb1dda0351d4d73e77747e689b4b2db97ee09e3799d9d7ee75f98f91150f69`.
+  `npm run check`: IDENTICAL. Fresh witness: all ten balanced Gold seeds reproduce.
+
+Earlier entries below describe their historical builds.
+
 ## [study-15] — 2026-09-14 — the opening view is a low eye, and the ten previews are rendered from it without memorial objects
 
 - The opening fit uses a 1.2-unit eye, a 50-degree lens, a target at 60% of tree height and 8% crown-top headroom. Season round trips preserve the complete view. The ten Gold previews follow this fit.

@@ -27,16 +27,13 @@ import { createRequire } from 'node:module';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
-/* esbuild lives in node_modules at the repository root (the declared home). A repository-
-   level or test/ install is accepted as a fallback so an existing checkout
-   keeps working, but the error names every root that was tried instead of
-   failing with a bare ERR_MODULE_NOT_FOUND. Resolution is explicit rather
-   than bare-specifier because the repository root carries a node_modules
-   symlink that native Windows cannot traverse. */
+/* esbuild lives in node_modules at the repository root. Resolution is explicit
+   so the error names every root that was tried instead of failing with a bare
+   ERR_MODULE_NOT_FOUND. */
 const DEP_ROOTS = [
-  path.resolve(HERE, '..'),            // repository root      (declared home)
-  path.resolve(HERE, '../..'),         // repository root
-  path.resolve(HERE, '../../test'),    // legacy: test/node_modules
+  path.resolve(HERE, '..'),            // repository root
+  path.resolve(HERE, '../..'),         // parent directory for a nested checkout
+  path.resolve(HERE, '../../test'),
 ];
 function loadEsbuild() {
   const tried = [];
@@ -66,7 +63,7 @@ const SRC = path.resolve(HERE, opt('--src', '../banyan_v5.source.html'));
 const OUT = path.resolve(HERE, opt('--out', '../banyan_v5.html'));
 const THREE = path.resolve(HERE, '../vendor/three.module.js');
 
-/* 1-2 Finding 8 · CANONICAL LINE ENDINGS. The repository is checked out with
+/* CANONICAL LINE ENDINGS. The repository is checked out with
    core.autocrlf=true, so on Windows the source arrives CRLF and on Linux LF —
    which used to make the stamped source hash, and therefore the built runtime,
    platform-dependent. Everything below works on the LF-normalized source, and
@@ -119,8 +116,8 @@ const outBuf = Buffer.from(out, 'utf8');
 const outSha = crypto.createHash('sha256').update(outBuf).digest('hex');
 
 if (CHECK) {
-  /* 1-2 Finding 8 gate: prove the documented build reproduces the SHIPPED
-     runtime byte-for-byte without touching it. Raw equality is the gate. A
+  /* Prove the documented build reproduces the SHIPPED runtime byte-for-byte
+     without touching it. Raw equality is the check. A
      checkout that re-expanded LF to CRLF (git core.autocrlf=true on Windows)
      is reported separately as CONTENT-IDENTICAL rather than silently passed. */
   const shipped = fs.existsSync(OUT) ? fs.readFileSync(OUT) : null;
