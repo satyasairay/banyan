@@ -29,6 +29,21 @@ grows for you, in the same ground.
 | ![Banyan 1653 "Single Bough" — wild meadow](docs/images/banyan-1653-wild-meadow.jpg) | ![Banyan 153 "Wide Colonnade" — quiet garden](docs/images/banyan-153-quiet-garden.jpg) |
 | `?seed=1653&ground=wild-meadow&scene=golden-hour` | `?seed=153&ground=quiet-garden&scene=golden-hour` |
 
+## How it grows
+
+The seed drives a constrained recursive grower: scaffold branches start along
+the trunk, then fork with depth-dependent lengths, radii and spacing; noise,
+a crown envelope and a height ceiling steer their paths. A pipe-model pass
+sets thickness from supported growth, then gravity bending moves the limbs.
+Foliage anchors retain branch/segment/fraction addresses and resolve onto the
+bent wood before low-canopy pruning and terminal coverage. See
+[growSkeleton](banyan_v5.source.html). This shares the parameter-driven,
+recursive approach of [Weber and Penn (1995)](https://doi.org/10.1145/218380.218427),
+but does not implement their parameter model. It does not implement
+[Runions, Lane and Prusinkiewicz's space colonisation (2007)](https://algorithmicbotany.org/papers/colonization.egwnp2007.html):
+there is no attraction-point population competing to guide branch extension.
+These are comparisons of algorithms, not a claim of derivation.
+
 ## What it costs to draw
 
 Everything in the frame is shaded rather than painted, so the bill comes due
