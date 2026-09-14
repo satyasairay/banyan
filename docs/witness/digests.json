@@ -1,5 +1,5 @@
 {
-  "at": "2026-09-14T07:38:41.443Z",
+  "at": "2026-09-14T07:41:45.054Z",
   "environment": {
     "browser": "Chrome 152.0.7977.83",
     "headless": false,
@@ -24,7 +24,7 @@
     },
     "softwareGL": false,
     "physicalTouchDevice": false,
-    "at": "2026-09-14T07:38:32.442Z"
+    "at": "2026-09-14T07:41:34.830Z"
   },
   "src": "banyan_v5.html",
   "params": {},
@@ -46,7 +46,7 @@
       "engine": "eb-geo-1",
       "sprigs": 2550,
       "tris": 696564,
-      "buildMs": 184,
+      "buildMs": 195,
       "keys": [
         "engineGeometryVersion",
         "anchorEngineVersion",
@@ -65,7 +65,7 @@
         "sockets",
         "combined"
       ],
-      "ms": 2548,
+      "ms": 2825,
       "matchesGold": {
         "combined": true,
         "anchors": true
@@ -83,7 +83,7 @@
       "engine": "eb-geo-1",
       "sprigs": 2550,
       "tris": 703728,
-      "buildMs": 182,
+      "buildMs": 245,
       "keys": [
         "engineGeometryVersion",
         "anchorEngineVersion",
@@ -102,7 +102,7 @@
         "sockets",
         "combined"
       ],
-      "ms": 611,
+      "ms": 686,
       "matchesGold": {
         "combined": true,
         "anchors": true
@@ -120,7 +120,7 @@
       "engine": "eb-geo-1",
       "sprigs": 2550,
       "tris": 711656,
-      "buildMs": 200,
+      "buildMs": 199,
       "keys": [
         "engineGeometryVersion",
         "anchorEngineVersion",
@@ -139,7 +139,7 @@
         "sockets",
         "combined"
       ],
-      "ms": 543,
+      "ms": 572,
       "matchesGold": {
         "combined": true,
         "anchors": true
@@ -157,7 +157,7 @@
       "engine": "eb-geo-1",
       "sprigs": 2550,
       "tris": 704678,
-      "buildMs": 177,
+      "buildMs": 188,
       "keys": [
         "engineGeometryVersion",
         "anchorEngineVersion",
@@ -176,7 +176,7 @@
         "sockets",
         "combined"
       ],
-      "ms": 485,
+      "ms": 576,
       "matchesGold": {
         "combined": true,
         "anchors": true
@@ -194,7 +194,7 @@
       "engine": "eb-geo-1",
       "sprigs": 2550,
       "tris": 710608,
-      "buildMs": 184,
+      "buildMs": 207,
       "keys": [
         "engineGeometryVersion",
         "anchorEngineVersion",
@@ -213,7 +213,7 @@
         "sockets",
         "combined"
       ],
-      "ms": 614,
+      "ms": 577,
       "matchesGold": {
         "combined": true,
         "anchors": true
@@ -231,7 +231,7 @@
       "engine": "eb-geo-1",
       "sprigs": 2550,
       "tris": 712512,
-      "buildMs": 188,
+      "buildMs": 205,
       "keys": [
         "engineGeometryVersion",
         "anchorEngineVersion",
@@ -250,7 +250,7 @@
         "sockets",
         "combined"
       ],
-      "ms": 542,
+      "ms": 559,
       "matchesGold": {
         "combined": true,
         "anchors": true
@@ -268,7 +268,7 @@
       "engine": "eb-geo-1",
       "sprigs": 2550,
       "tris": 711198,
-      "buildMs": 202,
+      "buildMs": 203,
       "keys": [
         "engineGeometryVersion",
         "anchorEngineVersion",
@@ -287,7 +287,7 @@
         "sockets",
         "combined"
       ],
-      "ms": 556,
+      "ms": 625,
       "matchesGold": {
         "combined": true,
         "anchors": true
@@ -305,80 +305,6 @@
       "engine": "eb-geo-1",
       "sprigs": 2550,
       "tris": 711676,
-      "buildMs": 200,
-      "keys": [
-        "engineGeometryVersion",
-        "anchorEngineVersion",
-        "species",
-        "seed",
-        "quality",
-        "season",
-        "branches",
-        "anchorCount",
-        "socketDetail",
-        "wood",
-        "branchTopology",
-        "canopy",
-        "anchors",
-        "stature",
-        "sockets",
-        "combined"
-      ],
-      "ms": 582,
-      "matchesGold": {
-        "combined": true,
-        "anchors": true
-      }
-    },
-    {
-      "preset": "balanced",
-      "seed": 1512,
-      "checksum": "13ea1c52",
-      "combined": "2a634720",
-      "anchors": "0706e9ac",
-      "wood": "862ade4c",
-      "canopy": "eb0c34c8",
-      "env": "5c33c5f9",
-      "engine": "eb-geo-1",
-      "sprigs": 2550,
-      "tris": 709068,
-      "buildMs": 188,
-      "keys": [
-        "engineGeometryVersion",
-        "anchorEngineVersion",
-        "species",
-        "seed",
-        "quality",
-        "season",
-        "branches",
-        "anchorCount",
-        "socketDetail",
-        "wood",
-        "branchTopology",
-        "canopy",
-        "anchors",
-        "stature",
-        "sockets",
-        "combined"
-      ],
-      "ms": 603,
-      "matchesGold": {
-        "combined": true,
-        "anchors": true
-      }
-    },
-    {
-      "preset": "balanced",
-      "seed": 314,
-      "checksum": "d837fe0d",
-      "combined": "794efae7",
-      "anchors": "12f47585",
-      "wood": "d2d373c4",
-      "canopy": "db5a7e13",
-      "env": "ad7df63c",
-      "engine": "eb-geo-1",
-      "sprigs": 2550,
-      "tris": 707412,
       "buildMs": 193,
       "keys": [
         "engineGeometryVersion",
@@ -398,7 +324,81 @@
         "sockets",
         "combined"
       ],
-      "ms": 560,
+      "ms": 1267,
+      "matchesGold": {
+        "combined": true,
+        "anchors": true
+      }
+    },
+    {
+      "preset": "balanced",
+      "seed": 1512,
+      "checksum": "13ea1c52",
+      "combined": "2a634720",
+      "anchors": "0706e9ac",
+      "wood": "862ade4c",
+      "canopy": "eb0c34c8",
+      "env": "5c33c5f9",
+      "engine": "eb-geo-1",
+      "sprigs": 2550,
+      "tris": 709068,
+      "buildMs": 192,
+      "keys": [
+        "engineGeometryVersion",
+        "anchorEngineVersion",
+        "species",
+        "seed",
+        "quality",
+        "season",
+        "branches",
+        "anchorCount",
+        "socketDetail",
+        "wood",
+        "branchTopology",
+        "canopy",
+        "anchors",
+        "stature",
+        "sockets",
+        "combined"
+      ],
+      "ms": 555,
+      "matchesGold": {
+        "combined": true,
+        "anchors": true
+      }
+    },
+    {
+      "preset": "balanced",
+      "seed": 314,
+      "checksum": "d837fe0d",
+      "combined": "794efae7",
+      "anchors": "12f47585",
+      "wood": "d2d373c4",
+      "canopy": "db5a7e13",
+      "env": "ad7df63c",
+      "engine": "eb-geo-1",
+      "sprigs": 2550,
+      "tris": 707412,
+      "buildMs": 188,
+      "keys": [
+        "engineGeometryVersion",
+        "anchorEngineVersion",
+        "species",
+        "seed",
+        "quality",
+        "season",
+        "branches",
+        "anchorCount",
+        "socketDetail",
+        "wood",
+        "branchTopology",
+        "canopy",
+        "anchors",
+        "stature",
+        "sockets",
+        "combined"
+      ],
+      "ms": 569,
       "matchesGold": {
         "combined": true,
         "anchors": true

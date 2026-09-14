@@ -1,5 +1,14 @@
 # Changelog
 
+## [study-18] — 2026-09-14 — two diagnostic warnings drop their work-item labels
+
+- The shadow-kernel and bark-bake warnings use descriptive labels; the two warning labels are the only executable changes.
+- LF-normalised source SHA-256: `3705dea731fe7bdecc335dbd53d24cadd71fc5b31d29bef81f53f7a5824ece4e`.
+  LF-normalised runtime SHA-256: `7d8fa7c9d4626c78c6753ad02320084062befd7a1f34e94be4a765cb0a15730e`.
+  `npm run check`: IDENTICAL. Fresh witness: all ten balanced Gold seeds reproduce.
+
+Earlier entries below describe their historical builds.
+
 ## [study-17] — 2026-09-14 — the earlier single-file stages leave the tree
 
 - The earlier single-file stages are retained in repository history. The README now describes their removal. The source is unchanged. The build is reproduced and its records and ten-seed witness are refreshed.

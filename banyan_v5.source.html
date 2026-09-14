@@ -292,7 +292,7 @@ function installShadowTent(r,hw=false,taps=4,step=1.0){
   const A='#elif defined( SHADOWMAP_TYPE_PCF_SOFT )',B='#elif defined( SHADOWMAP_TYPE_VSM )';
   const src=SHADOW_CHUNK_PRISTINE,i=src.indexOf(A),j=src.indexOf(B);
   if(i<0||j<0||j<i){
-    console.warn('[v5/A3] shadow kernel not patched (Three.js chunk changed shape) — keeping the stock filter');
+    console.warn('[v5/shadow-kernel] shadow kernel not patched (Three.js chunk changed shape) — keeping the stock filter');
     THREE.ShaderChunk.shadowmap_pars_fragment=SHADOW_CHUNK_PRISTINE;
     return false;
   }
@@ -2930,7 +2930,7 @@ function ebBakeBarkFields(geo,matrixWorld,mat){
     mark('bark-bake:'+(tLinked-tBake0).toFixed(1)+'+'+(performance.now()-tLinked).toFixed(1)+'ms');   // wait for the link · draw (boot marks)
     return true;
   }catch(e){
-    console.warn('[v5/fix-40] bark field bake skipped — the per-frame vertex path is kept:',e&&e.message||e);
+    console.warn('[v5/bark-bake] bark field bake skipped — the per-frame vertex path is kept:',e&&e.message||e);
     for(const f of FIELDS)geo.deleteAttribute(f[0]);
     return false;
   }finally{
