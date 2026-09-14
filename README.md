@@ -55,6 +55,16 @@ pixels tall, bark relief read from a mip nobody could see, a 64-tap shadow
 filter. Most of that is gated by screen footprint now, and the shadow filter is
 a 4x4 hardware compare.
 
+The GPU numbers above are historical measurements of the `balanced` portrait
+pose at 1080x896 in Chrome on a Radeon 740M: GPU milliseconds per frame under
+vsync, measured with `EXT_disjoint_timer_query_webgl2` by the author's private
+product-repository perf rig, which is not shipped here. Loop FPS measures the
+animation callback cadence, not GPU work; it is not the reciprocal of that
+GPU-time reading. Firefox and Safari do not expose this timer in their default
+configurations, so they cannot reproduce the GPU number by this mechanism
+([compatibility data](https://github.com/mdn/browser-compat-data/blob/main/api/EXT_disjoint_timer_query_webgl2.json)).
+`?debug=1` shows the study's smoothed loop FPS meter, not that external GPU timer.
+
 ![The same tree with the canopy hidden](docs/images/banyan-863-skeleton.jpg)
 
 The phone told a different story. The trunk carries about 125,000 vertices, and
