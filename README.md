@@ -188,10 +188,13 @@ August 2026.
 
 Working use case: [everbanyan.com](https://www.everbanyan.com), a living tree
 memorial for pets, is where this renderer grew and where it runs in production. Its
-remembrance objects for faith traditions are not
-part of this public build — they stay behind the product's own review
-obligation, and the runtime's `capabilities.refusedObjects` says so explicitly
-rather than leaving their absence to guesswork.
+public study refuses nameplates, portrait images, remembrance objects,
+companion lanterns, memory-leaf operations and the still tier. Rejected input
+silently leaves the base tree in place; `capabilities` reports those refusals.
+The Gold anchor table is still computed. Other species and experimental scene
+data remain in the bytes and are gated on the public surface. Gated does not
+mean absent from the source. Paid palettes and weather effects are not part
+of the study; their implementation has been deleted.
 
 ## Provenance and license
 

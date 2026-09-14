@@ -1,5 +1,14 @@
 # Changelog
 
+## [study-14] — 2026-09-14 — document the study boundary and the absence of paid looks
+
+- The README describes the public refusals, retained gated data and the absence of paid palettes and weather effects.
+- LF-normalised source SHA-256: `efbb789f7a3076cbd65a67f1492d5dc6113c52d571fc5b44cf7f55394197ce62`.
+  LF-normalised runtime SHA-256: `7ab36963f868a8f14e500fe40abc9db7466b8cbeeba0933c7ce1fb556243e742`.
+  `npm run check`: IDENTICAL. Fresh witness: all ten balanced Gold seeds reproduce.
+
+Earlier entries below describe their historical builds.
+
 ## [study-13] — 2026-09-14 — record the build and ten-seed witness
 
 - Record the build and ten-seed witness.
