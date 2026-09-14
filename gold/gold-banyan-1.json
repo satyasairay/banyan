@@ -1,6 +1,10 @@
 {
   "collectionVersion": "gold-banyan-1",
-  "rendererVersion": "v5+fix-10r1 · banyan-bonsai_v5.html sha256 C03CD3377248538D9BD7DECBDD5871BEEADAE59C04623523EE17DE6D3849B94C (LF-normalized content)",
+  "historicalCertification": {
+    "rendererIdentity": "v5 · banyan-bonsai_v5.html sha256 C03CD3377248538D9BD7DECBDD5871BEEADAE59C04623523EE17DE6D3849B94C (LF-normalized content)",
+    "sourceIdentity": "banyan-bonsai_v5.source.html sha256 30AC677FD4370A1FA2C3886476E17C1DF0B09CC1B53E4970C632D8B98D7E1351 (LF-normalized content)",
+    "reviewed": "2026-07-26"
+  },
   "engineGeometryVersion": "eb-geo-1",
   "anchorEngineVersion": "eb-anchor-1",
   "species": "banyan",
@@ -17,11 +21,9 @@
     "prefilterRejected": 0,
     "visuallyScreened": 2359,
     "thumbnailsRetained": 2359,
-    "note": "Every candidate carries a decision AND a reason; every stage-2 candidate has a retained thumbnail on disk and appears on a contact sheet. The previous manifest claimed \">= 2,000 candidates actually screened\" with no artefact behind it (3-4 I-P34-001)."
+    "note": "Historical screening counts; supporting decisions and contact sheets are retained in the private archive described above."
   },
-  "evidence": "review/fix/10/2026-07-26/A8/sweep/",
-  "pairwiseDistinction": "review/fix/10/2026-07-26/A7/GOLD-PAIRWISE-DISTINCTION.md",
-  "selection": "review/fix/10/2026-07-26/A7/A7-selection.json",
+  "historicalEvidence": "The certification, pairwise-distinction and selection records are held in the author's private project archive and are not public.",
   "invalidation": "Any geometry-affecting renderer change invalidates this manifest, its thumbnails and anchor evidence; bump engineGeometryVersion and re-run the complete sweep and review.",
   "trees": [
     {
@@ -31,7 +33,7 @@
       "engineGeometryVersion": "eb-geo-1",
       "checksum": "121d82a5",
       "anchorsChecksum": "d57c2245",
-      "thumbnail": "renderer/gold/seed-863.webp",
+      "thumbnail": "gold/seed-863.webp",
       "anchorCapacity": {
         "shell": 28452,
         "spaced": 437,
@@ -48,7 +50,7 @@
       "engineGeometryVersion": "eb-geo-1",
       "checksum": "e4942521",
       "anchorsChecksum": "2de56ce3",
-      "thumbnail": "renderer/gold/seed-1088.webp",
+      "thumbnail": "gold/seed-1088.webp",
       "anchorCapacity": {
         "shell": 29763,
         "spaced": 369,
@@ -64,7 +66,7 @@
       "engineGeometryVersion": "eb-geo-1",
       "checksum": "f3f0049b",
       "anchorsChecksum": "0240b777",
-      "thumbnail": "renderer/gold/seed-754.webp",
+      "thumbnail": "gold/seed-754.webp",
       "anchorCapacity": {
         "shell": 30617,
         "spaced": 433,
@@ -80,7 +82,7 @@
       "engineGeometryVersion": "eb-geo-1",
       "checksum": "aacc3c6b",
       "anchorsChecksum": "75a7572e",
-      "thumbnail": "renderer/gold/seed-776.webp",
+      "thumbnail": "gold/seed-776.webp",
       "anchorCapacity": {
         "shell": 29543,
         "spaced": 440,
@@ -95,7 +97,7 @@
       "engineGeometryVersion": "eb-geo-1",
       "checksum": "d3853ad2",
       "anchorsChecksum": "18532464",
-      "thumbnail": "renderer/gold/seed-1641.webp",
+      "thumbnail": "gold/seed-1641.webp",
       "anchorCapacity": {
         "shell": 30909,
         "spaced": 446,
@@ -110,7 +112,7 @@
       "engineGeometryVersion": "eb-geo-1",
       "checksum": "61409f45",
       "anchorsChecksum": "67ae7407",
-      "thumbnail": "renderer/gold/seed-1262.webp",
+      "thumbnail": "gold/seed-1262.webp",
       "anchorCapacity": {
         "shell": 31150,
         "spaced": 424,
@@ -125,7 +127,7 @@
       "engineGeometryVersion": "eb-geo-1",
       "checksum": "7751f09a",
       "anchorsChecksum": "74ae4a95",
-      "thumbnail": "renderer/gold/seed-153.webp",
+      "thumbnail": "gold/seed-153.webp",
       "anchorCapacity": {
         "shell": 31000,
         "spaced": 435,
@@ -140,7 +142,7 @@
       "engineGeometryVersion": "eb-geo-1",
       "checksum": "6c338736",
       "anchorsChecksum": "4e459982",
-      "thumbnail": "renderer/gold/seed-1653.webp",
+      "thumbnail": "gold/seed-1653.webp",
       "anchorCapacity": {
         "shell": 30584,
         "spaced": 445,
@@ -155,7 +157,7 @@
       "engineGeometryVersion": "eb-geo-1",
       "checksum": "2a634720",
       "anchorsChecksum": "0706e9ac",
-      "thumbnail": "renderer/gold/seed-1512.webp",
+      "thumbnail": "gold/seed-1512.webp",
       "anchorCapacity": {
         "shell": 30642,
         "spaced": 462,
@@ -170,7 +172,7 @@
       "engineGeometryVersion": "eb-geo-1",
       "checksum": "794efae7",
       "anchorsChecksum": "12f47585",
-      "thumbnail": "renderer/gold/seed-314.webp",
+      "thumbnail": "gold/seed-314.webp",
       "anchorCapacity": {
         "shell": 30403,
         "spaced": 430,
@@ -178,6 +180,5 @@
       },
       "reviewStatus": "approved"
     }
-  ],
-  "rendererSource": "banyan-bonsai_v5.source.html sha256 30AC677FD4370A1FA2C3886476E17C1DF0B09CC1B53E4970C632D8B98D7E1351 (LF-normalized content)"
+  ]
 }
