@@ -1,5 +1,5 @@
 {
-  "at": "2026-09-14T07:13:43.220Z",
+  "at": "2026-09-14T07:16:59.979Z",
   "environment": {
     "browser": "Chrome 152.0.7977.83",
     "headless": false,
@@ -24,7 +24,7 @@
     },
     "softwareGL": false,
     "physicalTouchDevice": false,
-    "at": "2026-09-14T07:13:34.741Z"
+    "at": "2026-09-14T07:16:35.148Z"
   },
   "src": "banyan_v5.html",
   "params": {},
@@ -46,7 +46,7 @@
       "engine": "eb-geo-1",
       "sprigs": 2550,
       "tris": 696564,
-      "buildMs": 173,
+      "buildMs": 338,
       "keys": [
         "engineGeometryVersion",
         "anchorEngineVersion",
@@ -65,7 +65,7 @@
         "sockets",
         "combined"
       ],
-      "ms": 2462,
+      "ms": 4500,
       "matchesGold": {
         "combined": true,
         "anchors": true
@@ -83,7 +83,7 @@
       "engine": "eb-geo-1",
       "sprigs": 2550,
       "tris": 703728,
-      "buildMs": 174,
+      "buildMs": 311,
       "keys": [
         "engineGeometryVersion",
         "anchorEngineVersion",
@@ -102,7 +102,7 @@
         "sockets",
         "combined"
       ],
-      "ms": 511,
+      "ms": 710,
       "matchesGold": {
         "combined": true,
         "anchors": true
@@ -120,7 +120,7 @@
       "engine": "eb-geo-1",
       "sprigs": 2550,
       "tris": 711656,
-      "buildMs": 186,
+      "buildMs": 218,
       "keys": [
         "engineGeometryVersion",
         "anchorEngineVersion",
@@ -139,7 +139,7 @@
         "sockets",
         "combined"
       ],
-      "ms": 477,
+      "ms": 561,
       "matchesGold": {
         "combined": true,
         "anchors": true
@@ -157,7 +157,7 @@
       "engine": "eb-geo-1",
       "sprigs": 2550,
       "tris": 704678,
-      "buildMs": 178,
+      "buildMs": 253,
       "keys": [
         "engineGeometryVersion",
         "anchorEngineVersion",
@@ -176,7 +176,7 @@
         "sockets",
         "combined"
       ],
-      "ms": 508,
+      "ms": 600,
       "matchesGold": {
         "combined": true,
         "anchors": true
@@ -194,7 +194,7 @@
       "engine": "eb-geo-1",
       "sprigs": 2550,
       "tris": 710608,
-      "buildMs": 188,
+      "buildMs": 225,
       "keys": [
         "engineGeometryVersion",
         "anchorEngineVersion",
@@ -213,7 +213,7 @@
         "sockets",
         "combined"
       ],
-      "ms": 549,
+      "ms": 4173,
       "matchesGold": {
         "combined": true,
         "anchors": true
@@ -231,7 +231,7 @@
       "engine": "eb-geo-1",
       "sprigs": 2550,
       "tris": 712512,
-      "buildMs": 204,
+      "buildMs": 303,
       "keys": [
         "engineGeometryVersion",
         "anchorEngineVersion",
@@ -250,7 +250,7 @@
         "sockets",
         "combined"
       ],
-      "ms": 585,
+      "ms": 828,
       "matchesGold": {
         "combined": true,
         "anchors": true
@@ -268,7 +268,7 @@
       "engine": "eb-geo-1",
       "sprigs": 2550,
       "tris": 711198,
-      "buildMs": 201,
+      "buildMs": 303,
       "keys": [
         "engineGeometryVersion",
         "anchorEngineVersion",
@@ -287,7 +287,7 @@
         "sockets",
         "combined"
       ],
-      "ms": 547,
+      "ms": 5065,
       "matchesGold": {
         "combined": true,
         "anchors": true
@@ -305,7 +305,7 @@
       "engine": "eb-geo-1",
       "sprigs": 2550,
       "tris": 711676,
-      "buildMs": 200,
+      "buildMs": 264,
       "keys": [
         "engineGeometryVersion",
         "anchorEngineVersion",
@@ -324,7 +324,7 @@
         "sockets",
         "combined"
       ],
-      "ms": 504,
+      "ms": 5152,
       "matchesGold": {
         "combined": true,
         "anchors": true
@@ -342,7 +342,7 @@
       "engine": "eb-geo-1",
       "sprigs": 2550,
       "tris": 709068,
-      "buildMs": 194,
+      "buildMs": 257,
       "keys": [
         "engineGeometryVersion",
         "anchorEngineVersion",
@@ -361,7 +361,7 @@
         "sockets",
         "combined"
       ],
-      "ms": 522,
+      "ms": 591,
       "matchesGold": {
         "combined": true,
         "anchors": true
@@ -379,7 +379,7 @@
       "engine": "eb-geo-1",
       "sprigs": 2550,
       "tris": 707412,
-      "buildMs": 194,
+      "buildMs": 218,
       "keys": [
         "engineGeometryVersion",
         "anchorEngineVersion",
@@ -398,7 +398,7 @@
         "sockets",
         "combined"
       ],
-      "ms": 506,
+      "ms": 525,
       "matchesGold": {
         "combined": true,
         "anchors": true
