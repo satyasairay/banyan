@@ -10,7 +10,10 @@ fields are baked on the viewer's GPU while the tree is built, so geometry
 determinism is not a promise of identical shading on every machine. A seed
 keeps the tree's identity reproducible at the same certified settings.
 
-![Banyan, close — bark and canopy grown from a seed](docs/images/hero-banyan-closeup.jpg)
+![Seed 863, golden-hour scene, earth-moss ground, low-eye close view](docs/images/hero-banyan-closeup.jpg)
+
+The current-view images are rendered from the shipped file at their stated seeds;
+the [ten Gold previews](gold/) are its witness.
 
 ## See it
 
@@ -32,7 +35,7 @@ grows for you, in the same ground.
 
 | | |
 |---|---|
-| ![Banyan 1653 "Single Bough" — wild meadow](docs/images/banyan-1653-wild-meadow.jpg) | ![Banyan 153 "Wide Colonnade" — quiet garden](docs/images/banyan-153-quiet-garden.jpg) |
+| ![Seed 1653, golden-hour scene, wild-meadow ground, low-eye opening view](docs/images/banyan-1653-wild-meadow.jpg) | ![Seed 153, golden-hour scene, quiet-garden ground, low-eye opening view](docs/images/banyan-153-quiet-garden.jpg) |
 | `?seed=1653&ground=wild-meadow&scene=golden-hour` | `?seed=153&ground=quiet-garden&scene=golden-hour` |
 
 ## How it grows
@@ -71,7 +74,7 @@ configurations, so they cannot reproduce the GPU number by this mechanism
 ([compatibility data](https://github.com/mdn/browser-compat-data/blob/main/api/EXT_disjoint_timer_query_webgl2.json)).
 `?debug=1` shows the study's smoothed loop FPS meter, not that external GPU timer.
 
-![The same tree with the canopy hidden](docs/images/banyan-863-skeleton.jpg)
+![Seed 863, golden-hour scene, earth-moss ground, low-eye opening view with canopy hidden](docs/images/banyan-863-skeleton.jpg)
 
 The phone told a different story. The trunk carries about 125,000 vertices, and
 a change that moved five noise fields from the pixel to the vertex was a win on
@@ -79,7 +82,12 @@ the laptop and a loss on an iPhone 13, where the trunk covers fewer pixels than
 it has vertices at the pose the page opens on. Those fields are baked once
 at build time now, on the GPU, and stored with the mesh.
 
-![Pixel difference between two builds, amplified](docs/images/banyan-863-heat.jpg)
+![Seed 863, golden-hour scene, earth-moss ground, explicit setView(0.62, 0.04, 32, 0, 5, 0), amplified difference between 58a9cb5 and 8d2e043](docs/images/banyan-863-heat.jpg)
+
+Frame-budget comparison: [58a9cb5](https://github.com/satyasairay/banyan/commit/58a9cb584748f49017bbc1f3ae08ea511d33fb92)
+to [8d2e043](https://github.com/satyasairay/banyan/commit/8d2e043828e9b66c6ba2d1f54fe834c1bf95c02a),
+`balanced`, `setView(0.62, 0.04, 32, 0, 5, 0)` in both builds.
+The largest channel difference is amplified into RGB by 64×, 16× and 4×.
 
 That picture is how a look change gets checked. Two builds, the same frame,
 every differing pixel lit. The trees in the gold catalogue reproduce their
