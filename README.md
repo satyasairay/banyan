@@ -10,6 +10,8 @@ fields are baked on the viewer's GPU while the tree is built, so geometry
 determinism is not a promise of identical shading on every machine. A seed
 keeps the tree's identity reproducible at the same certified settings.
 
+![Seed 863, golden-hour scene, earth-moss ground, low-eye opening view with a 40-degree azimuth sweep](docs/images/banyan-863-orbit.gif)
+
 ![Seed 863, golden-hour scene, earth-moss ground, low-eye close view](docs/images/hero-banyan-closeup.jpg)
 
 The current-view images are rendered from the shipped file at their stated seeds;
