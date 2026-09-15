@@ -1,5 +1,15 @@
 # Changelog
 
+## [study-20] · 2026-09-15 · refresh the README images, orbit and prose
+
+- The hero, gallery and skeleton are captured from the shipped runtime. A seven-second orbit opens the README, with the still hero below it.
+- The heat map isolates the frame-budget port: `58a9cb5` against `8d2e043`, at the same explicit pose.
+- The README, contribution policy and preceding entry use shorter prose.
+- Runtime and source are unchanged. All ten balanced Gold seeds reproduce their four recorded digests.
+- LF-normalised source SHA-256: `3705dea731fe7bdecc335dbd53d24cadd71fc5b31d29bef81f53f7a5824ece4e`.
+  LF-normalised runtime SHA-256: `7d8fa7c9d4626c78c6753ad02320084062befd7a1f34e94be4a765cb0a15730e`.
+  `npm run check`: IDENTICAL.
+
 ## [study-19] · 2026-09-14 · the first study entry names the build it describes
 
 - The first study entry now describes that build's capabilities. The source is unchanged. Build verification and the ten-seed witness were rerun.
