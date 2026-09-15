@@ -12,7 +12,7 @@ keeps the tree's identity reproducible at the same certified settings.
 
 ![Seed 863, golden-hour scene, earth-moss ground, low-eye opening view with a 40-degree azimuth sweep](docs/images/banyan-863-orbit.gif)
 
-![Seed 863, golden-hour scene, earth-moss ground, low-eye close view](docs/images/hero-banyan-closeup.jpg)
+![Seed 863, golden-hour scene, earth-moss ground, close view, eye 1.2 inside the tree reach, FOV 46, setView(0.62, -0.5667292175235064, 6.519202405202649, 0, 4.7, 0)](docs/images/hero-banyan-closeup.jpg)
 
 The current-view images are rendered from the shipped file at their stated seeds;
 the [ten Gold previews](gold/) are its witness.
@@ -37,7 +37,7 @@ grows for you, in the same ground.
 
 | | |
 |---|---|
-| ![Seed 1653, golden-hour scene, wild-meadow ground, low-eye opening view](docs/images/banyan-1653-wild-meadow.jpg) | ![Seed 153, golden-hour scene, quiet-garden ground, low-eye opening view](docs/images/banyan-153-quiet-garden.jpg) |
+| ![Seed 1653, golden-hour scene, wild-meadow ground, gallery view, eye 1.6, target at 55% of tree height, FOV 46, setView(0.62, -0.1869082789978265, 18.959922210121512, 0, 5.123169035697714, 0)](docs/images/banyan-1653-wild-meadow.jpg) | ![Seed 153, golden-hour scene, quiet-garden ground, gallery view, eye 1.6, target at 55% of tree height, FOV 46, setView(0.62, -0.19136596158542446, 20.05518397887384, 0, 5.414497966813612, 0)](docs/images/banyan-153-quiet-garden.jpg) |
 | `?seed=1653&ground=wild-meadow&scene=golden-hour` | `?seed=153&ground=quiet-garden&scene=golden-hour` |
 
 ## How it grows
@@ -81,12 +81,13 @@ the laptop and a loss on an iPhone 13, where the trunk covers fewer pixels than
 it has vertices at the pose the page opens on. Those fields are baked once
 at build time now, on the GPU, and stored with the mesh.
 
-![Seed 863, golden-hour scene, earth-moss ground, explicit setView(0.62, 0.04, 32, 0, 5, 0), amplified difference between 58a9cb5 and 8d2e043](docs/images/banyan-863-heat.jpg)
+![Seed 863, golden-hour scene, earth-moss ground, explicit setView(0.62, 0.04, 32, 0, 5, 0), amplified difference between 58a9cb5 and 8d2e043, cropped to the tree at 8:5 aspect](docs/images/banyan-863-heat.jpg)
 
 Frame-budget comparison: [58a9cb5](https://github.com/satyasairay/banyan/commit/58a9cb584748f49017bbc1f3ae08ea511d33fb92)
 to [8d2e043](https://github.com/satyasairay/banyan/commit/8d2e043828e9b66c6ba2d1f54fe834c1bf95c02a),
 `balanced`, `setView(0.62, 0.04, 32, 0, 5, 0)` in both builds.
 The largest channel difference is amplified into RGB by 64×, 16× and 4×.
+The heat map is cropped to the tree at 8:5 aspect and resized to 1280×800.
 
 The heat map amplifies pixel differences between two builds at the same view.
 The trees in the gold catalogue reproduce their geometry checksums on every v5 build, and shading changes are held to what a
