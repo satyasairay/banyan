@@ -2,10 +2,10 @@
 
 A procedural banyan tree study for three.js.
 
-Everything is grown from code: trunk, aerial prop roots, bark, leaves, ground,
-grass, litter, light. No models, no textures, no downloaded assets. A tree is a
-32-bit seed. Geometry is certified at `balanced`; `auto` chooses a detail
-tier for the screen, and different tiers have different mesh counts. Bark
+The trunk, aerial prop roots, bark and leaves grow from code, along with the
+ground, grass, litter and light. There are no models or texture files to download.
+A tree starts with a 32-bit seed. Geometry is certified at `balanced`; `auto`
+chooses a detail tier for the screen, and different tiers have different mesh counts. Bark
 fields are baked on the viewer's GPU while the tree is built, so geometry
 determinism is not a promise of identical shading on every machine. A seed
 keeps the tree's identity reproducible at the same certified settings.
@@ -23,8 +23,8 @@ the [ten Gold previews](gold/) are its witness.
 tree. Or open `banyan_v5.html` straight off disk: one self-contained file, with
 three.js baked in by a reproducible build, so it needs no network at all. Drag
 to orbit, tap a leaf for botanical details, press "copy tree link" for a link that
-carries the seed, scene and season (the ground is not in the copied link yet — add
-it by hand). Deep links carry `?seed=&scene=&season=`.
+carries the seed, scene and season. Add the ground to the link by hand.
+Deep links carry `?seed=&scene=&season=`.
 
 Season changes preserve the view, including its lens. Reset returns to the
 low-eye opening. Regrowing, choosing another tree or seed, changing quality,
@@ -48,18 +48,17 @@ a crown envelope and a height ceiling steer their paths. A pipe-model pass
 sets thickness from supported growth, then gravity bending moves the limbs.
 Foliage anchors retain branch/segment/fraction addresses and resolve onto the
 bent wood before low-canopy pruning and terminal coverage. See
-[growSkeleton](banyan_v5.source.html). This shares the parameter-driven,
+[growSkeleton](banyan_v5.source.html#L965). This shares the parameter-driven,
 recursive approach of [Weber and Penn (1995)](https://doi.org/10.1145/218380.218427),
 but does not implement their parameter model. It does not implement
 [Runions, Lane and Prusinkiewicz's space colonisation (2007)](https://algorithmicbotany.org/papers/colonization.egwnp2007.html):
 there is no attraction-point population competing to guide branch extension.
-These are comparisons of algorithms, not a claim of derivation.
+These algorithm comparisons do not imply derivation.
 
 ## What it costs to draw
 
-Everything in the frame is shaded rather than painted, so the bill comes due
-every frame. On the reference laptop GPU (a Radeon 740M, Chrome, 1080x896) the
-`balanced` tree spent 21 ms of GPU time per frame in August. It now spends
+Procedural shading runs every frame. On the reference laptop GPU (a Radeon
+740M, Chrome, 1080x896) the `balanced` tree spent 21 ms of GPU time per frame in August. It now spends
 about 12.7 ms and stays above 59 fps through orbit and dive. Four fragment
 programs had been doing work below the pixel: leaf venation on leaves fifteen
 pixels tall, bark relief read from a mip nobody could see, a 64-tap shadow
@@ -68,18 +67,16 @@ a 4x4 hardware compare.
 
 The GPU numbers above are historical measurements of the `balanced` portrait
 pose at 1080x896 in Chrome on a Radeon 740M: GPU milliseconds per frame under
-vsync, measured with `EXT_disjoint_timer_query_webgl2` by the author's private
-product-repository perf rig, which is not shipped here. Loop FPS measures the
-animation callback cadence, not GPU work; it is not the reciprocal of that
-GPU-time reading. Firefox and Safari do not expose this timer in their default
-configurations, so they cannot reproduce the GPU number by this mechanism
+vsync, measured with `EXT_disjoint_timer_query_webgl2`. The measurement tool
+is not included here. Loop FPS measures animation callback cadence. It does
+not measure GPU work or equal the reciprocal of GPU time. Firefox and Safari
+do not expose this timer in their default configurations, so they cannot reproduce the GPU number by this mechanism
 ([compatibility data](https://github.com/mdn/browser-compat-data/blob/main/api/EXT_disjoint_timer_query_webgl2.json)).
 `?debug=1` shows the study's smoothed loop FPS meter, not that external GPU timer.
 
 ![Seed 863, golden-hour scene, earth-moss ground, low-eye opening view with canopy hidden](docs/images/banyan-863-skeleton.jpg)
 
-The phone told a different story. The trunk carries about 125,000 vertices, and
-a change that moved five noise fields from the pixel to the vertex was a win on
+The trunk carries about 125,000 vertices. A change that moved five noise fields from the pixel to the vertex was a win on
 the laptop and a loss on an iPhone 13, where the trunk covers fewer pixels than
 it has vertices at the pose the page opens on. Those fields are baked once
 at build time now, on the GPU, and stored with the mesh.
@@ -91,9 +88,8 @@ to [8d2e043](https://github.com/satyasairay/banyan/commit/8d2e043828e9b66c6ba2d1
 `balanced`, `setView(0.62, 0.04, 32, 0, 5, 0)` in both builds.
 The largest channel difference is amplified into RGB by 64×, 16× and 4×.
 
-That picture is how a look change gets checked. Two builds, the same frame,
-every differing pixel lit. The trees in the gold catalogue reproduce their
-geometry checksums on every v5 build, and shading changes are held to what a
+The heat map amplifies pixel differences between two builds at the same view.
+The trees in the gold catalogue reproduce their geometry checksums on every v5 build, and shading changes are held to what a
 pixel diff, and then a pair of eyes on the live page, cannot tell apart. First
 visit on the phone is the part that did not improve: three paired runs on the
 same iPhone 13 put the new build within two per cent of the old one, and the
@@ -104,8 +100,7 @@ bark bake's one-time cost is where that went.
 Not every seed grows a great tree. [gold/](gold/) is the curated catalogue:
 ten seeds selected from thousands of candidates, each with a preview image,
 recorded in [gold/gold-banyan-1.json](gold/gold-banyan-1.json) with geometry
-checksums — so a certified tree can be verified, not just admired. Seed `863`
-("Sheltering") and seed `1653` ("Single Bough") are good places to start.
+checksums for verification. Seed `863` ("Sheltering") and seed `1653` ("Single Bough") are good places to start.
 
 ### Verify a Gold tree
 
@@ -181,8 +176,8 @@ npm run check     # rebuilds in memory, compares byte-for-byte
 ```
 
 The build LF-normalizes the source, bundles with a pinned esbuild, and stamps
-the source hash into the runtime header — one clean build produces the same
-bytes on Windows and Linux. You do not have to trust the shipped file; check it.
+the source hash into the runtime header. A clean build produces the same
+bytes on Windows and Linux. Run the check to verify the shipped file.
 The SHA-256 rows below hash LF-normalised text: convert CRLF to LF before
 hashing a checkout; a raw CRLF file hash will differ.
 
@@ -213,6 +208,5 @@ of the study; their implementation has been deleted.
 
 The engine and every scene are 100% procedural; zero external assets are
 bundled (see [SOURCES.md](SOURCES.md)). three.js is MIT. This repository is
-AGPL-3.0 — use it, learn from it, build with it; if you ship something built on
-it, your code must be open too. For a commercial license outside those terms,
-contact the author. See [LICENSE](LICENSE).
+AGPL-3.0. If you ship something built on it, your code must be open too.
+For a commercial license outside those terms, contact the author. See [LICENSE](LICENSE).

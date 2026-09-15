@@ -1,8 +1,8 @@
 # Changelog
 
-## [study-19] — 2026-09-14 — the first study entry names the build it describes
+## [study-19] · 2026-09-14 · the first study entry names the build it describes
 
-- The first study entry describes the capabilities of that historical build. The source is unchanged. The build is reproduced and its records and ten-seed witness are refreshed.
+- The first study entry now describes that build's capabilities. The source is unchanged. Build verification and the ten-seed witness were rerun.
 - LF-normalised source SHA-256: `3705dea731fe7bdecc335dbd53d24cadd71fc5b31d29bef81f53f7a5824ece4e`.
   LF-normalised runtime SHA-256: `7d8fa7c9d4626c78c6753ad02320084062befd7a1f34e94be4a765cb0a15730e`.
   `npm run check`: IDENTICAL.
