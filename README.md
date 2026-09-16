@@ -10,7 +10,7 @@ fields are baked on the viewer's GPU while the tree is built, so geometry
 determinism is not a promise of identical shading on every machine. A seed
 keeps the tree's identity reproducible at the same certified settings.
 
-![Seed 863, golden-hour scene, earth-moss ground, low-eye opening view with a 40-degree azimuth sweep](docs/images/banyan-863-orbit.gif)
+![Seed 863, golden-hour scene, earth-moss ground, low-eye opening view with a 40-degree azimuth sweep forward and back](docs/images/banyan-863-orbit.gif)
 
 ![Seed 863, golden-hour scene, earth-moss ground, close view, eye 1.2 inside the tree reach, FOV 46, setView(0.62, -0.5667292175235064, 6.519202405202649, 0, 4.7, 0)](docs/images/hero-banyan-closeup.jpg)
 
@@ -37,8 +37,8 @@ grows for you, in the same ground.
 
 | | |
 |---|---|
-| ![Seed 1653, golden-hour scene, wild-meadow ground, gallery view, eye 1.6, target at 55% of tree height, FOV 46, setView(0.62, -0.1869082789978265, 18.959922210121512, 0, 5.123169035697714, 0)](docs/images/banyan-1653-wild-meadow.jpg) | ![Seed 153, golden-hour scene, quiet-garden ground, gallery view, eye 1.6, target at 55% of tree height, FOV 46, setView(0.62, -0.19136596158542446, 20.05518397887384, 0, 5.414497966813612, 0)](docs/images/banyan-153-quiet-garden.jpg) |
-| `?seed=1653&ground=wild-meadow&scene=golden-hour` | `?seed=153&ground=quiet-garden&scene=golden-hour` |
+| ![Seed 1653, golden-hour scene, wild-meadow ground, gallery view, eye 1.6, target at 55% of tree height, FOV 46, setView(0.62, -0.1869082789978265, 18.959922210121512, 0, 5.123169035697714, 0)](docs/images/banyan-1653-wild-meadow.jpg) | ![Seed 153, noon scene, quiet-garden ground, gallery view, eye 1.6, target at 55% of tree height, FOV 46, setView(0.62, -0.19136596158542446, 20.05518397887384, 0, 5.414497966813612, 0)](docs/images/banyan-153-quiet-garden.jpg) |
+| `?seed=1653&ground=wild-meadow&scene=golden-hour` | `?seed=153&ground=quiet-garden&scene=noon` |
 
 ## How it grows
 
@@ -91,10 +91,11 @@ The heat map is cropped to the tree at 8:5 aspect and resized to 1280×800.
 
 The heat map amplifies pixel differences between two builds at the same view.
 The trees in the gold catalogue reproduce their geometry checksums on every v5 build, and shading changes are held to what a
-pixel diff, and then a pair of eyes on the live page, cannot tell apart. First
-visit on the phone is the part that did not improve: three paired runs on the
-same iPhone 13 put the new build within two per cent of the old one, and the
-bark bake's one-time cost is where that went.
+pixel diff, and then a pair of eyes on the live page, cannot tell apart. On an
+iPhone 13 running Chrome for iOS, the A/B/A comparison starts with a cold first
+boot of 2407 ms and ends at 1230 ms on the return to the baseline; the candidate's
+first boot between them was 1379 ms. The five-boot medians were 1101, 1111 and
+1131 ms, so the candidate stayed within two percent of both baseline runs.
 
 ## Gold seeds
 
