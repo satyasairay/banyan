@@ -1,5 +1,13 @@
 # Changelog
 
+## [study-22] · 2026-10-01 · the way back to the repository
+
+- The panel's `source repository` link is green, bold, underlined and marked ↗; it opens in a new tab and takes the panel's focus ring. The ten previews under `gold/` are named binary.
+- The geometry is unchanged. All ten balanced Gold seeds reproduce their four recorded digests; the witness is re-run on this build.
+- LF-normalised source SHA-256: `6d7429ac8d7460e55b85e5e1bb68c3e1449053ebcc51d177f7299b1b80ba7048`.
+  LF-normalised runtime SHA-256: `04fd46cc6851fe84c3a7c3cbe249320332b8e113abecea020570576b835db68c`.
+  `npm run check`: IDENTICAL.
+
 ## [study-21] · 2026-09-29 · LF in default Windows checkouts
 
 - Text checkouts use LF; image files stay binary. The runtime and source are unchanged.

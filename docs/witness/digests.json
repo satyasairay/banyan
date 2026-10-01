@@ -1,16 +1,16 @@
 {
-  "at": "2026-09-14T07:44:45.932Z",
+  "at": "2026-10-01T03:18:54.080Z",
   "environment": {
-    "browser": "Chrome 152.0.7977.83",
+    "browser": "Chrome 154.0.8037.58",
     "headless": false,
-    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
     "os": "Windows_NT 10.0.26200 (x64)",
     "host": "DESKTOP-H727NHD",
     "node": "v22.22.2",
     "gpu": {
       "glRenderer": "ANGLE (AMD, AMD Radeon 740M Graphics (0x000015C8) Direct3D11 vs_5_0 ps_5_0, D3D11-32.0.21030.2001)",
       "glVendor": "Google Inc. (AMD)",
-      "glVersion": "OpenGL ES 3.0 (ANGLE 2.1.28468 git hash: 7df613367a1d)",
+      "glVersion": "OpenGL ES 3.0 (ANGLE 2.1.28731 git hash: 1ff8799c596d)",
       "rasterization": "Hardware accelerated",
       "canvas": "Hardware accelerated"
     },
@@ -24,9 +24,9 @@
     },
     "softwareGL": false,
     "physicalTouchDevice": false,
-    "at": "2026-09-14T07:44:36.887Z"
+    "at": "2026-10-01T03:18:43.231Z"
   },
-  "src": "banyan_v5.html",
+  "src": "renderer/banyan_v5.html",
   "params": {},
   "manifest": {
     "version": "gold-banyan-1",
@@ -46,7 +46,7 @@
       "engine": "eb-geo-1",
       "sprigs": 2550,
       "tris": 696564,
-      "buildMs": 182,
+      "buildMs": 189,
       "keys": [
         "engineGeometryVersion",
         "anchorEngineVersion",
@@ -65,7 +65,7 @@
         "sockets",
         "combined"
       ],
-      "ms": 2576,
+      "ms": 4125,
       "matchesGold": {
         "combined": true,
         "anchors": true
@@ -83,7 +83,7 @@
       "engine": "eb-geo-1",
       "sprigs": 2550,
       "tris": 703728,
-      "buildMs": 193,
+      "buildMs": 274,
       "keys": [
         "engineGeometryVersion",
         "anchorEngineVersion",
@@ -102,7 +102,7 @@
         "sockets",
         "combined"
       ],
-      "ms": 613,
+      "ms": 757,
       "matchesGold": {
         "combined": true,
         "anchors": true
@@ -120,7 +120,7 @@
       "engine": "eb-geo-1",
       "sprigs": 2550,
       "tris": 711656,
-      "buildMs": 188,
+      "buildMs": 207,
       "keys": [
         "engineGeometryVersion",
         "anchorEngineVersion",
@@ -139,7 +139,7 @@
         "sockets",
         "combined"
       ],
-      "ms": 542,
+      "ms": 578,
       "matchesGold": {
         "combined": true,
         "anchors": true
@@ -157,7 +157,7 @@
       "engine": "eb-geo-1",
       "sprigs": 2550,
       "tris": 704678,
-      "buildMs": 182,
+      "buildMs": 185,
       "keys": [
         "engineGeometryVersion",
         "anchorEngineVersion",
@@ -176,7 +176,7 @@
         "sockets",
         "combined"
       ],
-      "ms": 543,
+      "ms": 526,
       "matchesGold": {
         "combined": true,
         "anchors": true
@@ -194,7 +194,7 @@
       "engine": "eb-geo-1",
       "sprigs": 2550,
       "tris": 710608,
-      "buildMs": 192,
+      "buildMs": 191,
       "keys": [
         "engineGeometryVersion",
         "anchorEngineVersion",
@@ -213,7 +213,7 @@
         "sockets",
         "combined"
       ],
-      "ms": 538,
+      "ms": 532,
       "matchesGold": {
         "combined": true,
         "anchors": true
@@ -231,7 +231,7 @@
       "engine": "eb-geo-1",
       "sprigs": 2550,
       "tris": 712512,
-      "buildMs": 195,
+      "buildMs": 194,
       "keys": [
         "engineGeometryVersion",
         "anchorEngineVersion",
@@ -250,7 +250,7 @@
         "sockets",
         "combined"
       ],
-      "ms": 555,
+      "ms": 541,
       "matchesGold": {
         "combined": true,
         "anchors": true
@@ -268,7 +268,7 @@
       "engine": "eb-geo-1",
       "sprigs": 2550,
       "tris": 711198,
-      "buildMs": 197,
+      "buildMs": 198,
       "keys": [
         "engineGeometryVersion",
         "anchorEngineVersion",
@@ -287,7 +287,7 @@
         "sockets",
         "combined"
       ],
-      "ms": 569,
+      "ms": 587,
       "matchesGold": {
         "combined": true,
         "anchors": true
@@ -305,7 +305,7 @@
       "engine": "eb-geo-1",
       "sprigs": 2550,
       "tris": 711676,
-      "buildMs": 184,
+      "buildMs": 181,
       "keys": [
         "engineGeometryVersion",
         "anchorEngineVersion",
@@ -324,7 +324,7 @@
         "sockets",
         "combined"
       ],
-      "ms": 545,
+      "ms": 686,
       "matchesGold": {
         "combined": true,
         "anchors": true
@@ -342,7 +342,7 @@
       "engine": "eb-geo-1",
       "sprigs": 2550,
       "tris": 709068,
-      "buildMs": 203,
+      "buildMs": 178,
       "keys": [
         "engineGeometryVersion",
         "anchorEngineVersion",
@@ -361,7 +361,7 @@
         "sockets",
         "combined"
       ],
-      "ms": 620,
+      "ms": 578,
       "matchesGold": {
         "combined": true,
         "anchors": true
@@ -379,7 +379,7 @@
       "engine": "eb-geo-1",
       "sprigs": 2550,
       "tris": 707412,
-      "buildMs": 200,
+      "buildMs": 211,
       "keys": [
         "engineGeometryVersion",
         "anchorEngineVersion",
@@ -398,7 +398,7 @@
         "sockets",
         "combined"
       ],
-      "ms": 615,
+      "ms": 573,
       "matchesGold": {
         "combined": true,
         "anchors": true
